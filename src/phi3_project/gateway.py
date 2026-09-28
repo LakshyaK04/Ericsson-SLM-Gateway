@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 import httpx
 
 from .pii import redact_pii
+from .router import IntentRouter
 
 
 app = FastAPI(
@@ -11,6 +12,8 @@ app = FastAPI(
 )
 
 VLLM_URL = "http://localhost:8000"
+
+router = IntentRouter()
 
 
 @app.get("/health")
@@ -24,12 +27,25 @@ async def health():
 @app.post("/v1/chat/completions")
 async def chat_completions(request: dict):
     try:
-        # Redact PII from incoming user messages
+        # 1. Redact PII
         for message in request.get("messages", []):
             if message.get("role") == "user":
-                message["content"] = redact_pii(message.get("content", ""))
+                message["content"] = redact_pii(
+                    message.get("content", "")
+                )
 
-        # Forward the sanitized request to vLLM
+        # 2. Determine intent
+        user_messages = [
+            message.get("content", "")
+            for message in request.get("messages", [])
+            if message.get("role") == "user"
+        ]
+
+        user_query = user_messages[-1] if user_messages else ""
+
+        routing_result = router.classify(user_query)
+
+        # 3. Forward sanitized request to vLLM
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{VLLM_URL}/v1/chat/completions",
@@ -42,7 +58,12 @@ async def chat_completions(request: dict):
                 detail=response.text,
             )
 
-        return response.json()
+        result = response.json()
+
+        # 4. Add routing information
+        result["routing"] = routing_result
+
+        return result
 
     except httpx.RequestError as e:
         raise HTTPException(
