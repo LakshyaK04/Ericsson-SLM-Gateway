@@ -40,10 +40,15 @@ class Settings(BaseSettings):
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 1.0
 
-    # Intent router & PII (used in later phases)
+    # Intent router & PII
     ROUTER_THRESHOLD: float = 0.55
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
+    PROJECT_CODENAMES: str = "Project-Titan,Project-Apollo,Project-Odin,Project-Thor,Project-Aegis"
     RAG_SERVICE_URL: str = "http://localhost:8001"
+
+    @property
+    def project_codenames_list(self) -> list[str]:
+        return [c.strip() for c in self.PROJECT_CODENAMES.split(",") if c.strip()]
 
 
 # Global settings singleton

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from .backends import LLMBackend, get_backend
 from .config import settings
+from .pii import PIIRedactionError, PIIRedactor, get_redactor
 from .schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -29,14 +30,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Backend instance
+# Backend & PII instances
 backend: Optional[LLMBackend] = None
+pii_redactor: Optional[PIIRedactor] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model backend once at startup per rule 5."""
-    global backend
+    """Load model backend and PII redactor once at startup per rule 5."""
+    global backend, pii_redactor
+    logger.info("Initializing SLM Gateway PII redactor...")
+    pii_redactor = get_redactor(settings)
+    app.state.pii_redactor = pii_redactor
+
     logger.info("Initializing SLM Gateway backend: %s...", settings.BACKEND)
     backend = get_backend(settings)
     try:
@@ -195,11 +201,35 @@ async def chat_completions(
             },
         )
 
-    raw_messages = [m.model_dump() for m in request.messages]
+    # 1. Redact PII from user messages
+    total_redactions = 0
+    sanitized_messages = []
+    redactor = pii_redactor or get_redactor(settings)
+
+    for message in request.messages:
+        msg_dict = message.model_dump()
+        if msg_dict.get("role") == "user":
+            try:
+                redacted_content, count = redactor.redact(msg_dict.get("content", ""))
+                msg_dict["content"] = redacted_content
+                total_redactions += count
+            except PIIRedactionError as e:
+                logger.error("PII redaction failed in fail-closed mode: %s", str(e))
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={
+                        "error": {
+                            "message": f"PII redaction failed: {str(e)}",
+                            "type": "pii_redaction_error",
+                            "code": 500,
+                        }
+                    },
+                )
+        sanitized_messages.append(msg_dict)
 
     try:
         content, prompt_tokens, completion_tokens, finish_reason = await backend.generate(
-            messages=raw_messages,
+            messages=sanitized_messages,
             temperature=request.temperature,
             top_p=request.top_p,
             max_tokens=request.max_tokens,
@@ -233,4 +263,5 @@ async def chat_completions(
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
         ),
+        x_pii={"redactions": total_redactions},
     )

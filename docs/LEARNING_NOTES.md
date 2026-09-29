@@ -111,3 +111,65 @@ uv run pytest gateway/tests/test_api.py gateway/tests/test_schemas.py -v
 uv run python -c "from openai import OpenAI; client = OpenAI(base_url='http://127.0.0.1:8000/v1', api_key='not-needed'); resp = client.chat.completions.create(model='microsoft/Phi-3-mini-4k-instruct', messages=[{'role': 'user', 'content': 'What is the capital of Sweden?'}], temperature=0.0); print(resp.choices[0].message.content)"
 ```
 
+---
+
+## Phase 2: PII Redaction
+
+### What was built
+
+We implemented the privacy subsystem in `gateway/src/slm_gateway/pii.py` using Microsoft Presidio (`presidio-analyzer` and `presidio-anonymizer`) powered by the spaCy `en_core_web_sm` NLP pipeline.
+
+We restricted the detected entity list to sensitive identifiers: `PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, and `IP_ADDRESS`, explicitly excluding `LOCATION` and `DATE_TIME` to prevent false-positive masking on normal conversational and technical queries.
+
+We extended Presidio with custom recognizers:
+1. `EMPLOYEE_ID`: Regex pattern recognizer targeting organizational IDs matching `\bEMP-\d{5,7}\b`.
+2. `PROJECT_CODENAME`: Deny-list recognizer targeting internal confidential project codenames configured via `PII_PROJECT_CODENAMES`.
+3. `PHONE_NUMBER`: Supplementary regex recognizer capturing international and synthetic telephone patterns alongside Presidio's standard NANP validator.
+
+We added support for typed placeholders (`<EMAIL_ADDRESS>`, `<EMPLOYEE_ID>`, etc.) and configurable failure policies (`PII_FAIL_MODE=closed|open`). Under the default fail-closed policy, if PII detection fails during startup or request processing, an error is raised (returning HTTP 500) rather than leaking raw private data.
+
+We wired PII sanitization into `gateway/src/slm_gateway/main.py` so every `user` message is sanitized before passing to the backend, and the count of redactions is returned in the response metadata under `x_pii: {"redactions": count}`.
+
+We created an 18-test suite in `gateway/tests/test_pii.py` covering table-driven entity redaction, custom recognizers, false-positive protection ("What is the capital of Germany?"), fail-closed / fail-open behaviors, and end-to-end payload assertions verifying that the underlying LLM backend never receives raw PII.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Microsoft Presidio** | An open-source SDK from Microsoft for detecting, categorizing, and anonymizing Personally Identifiable Information (PII) in text. |
+| **spaCy NER** | Named Entity Recognition statistical model (`en_core_web_sm`) used by Presidio to identify unstructured entities such as `PERSON`. |
+| **Fail-Closed** | A security design principle where any failure in a security/privacy mechanism aborts the transaction rather than allowing unverified or sensitive data through. |
+| **Typed Placeholder** | Replacing sensitive data with a typed label (`<EMAIL_ADDRESS>`) instead of uniform masking (`***`), preserving syntactic role and semantic clarity for LLM reasoning. |
+| **Luhn Algorithm** | A checksum formula used by Presidio's credit card recognizer to validate card numbers and avoid false matches on random digit strings. |
+
+### Why we did it this way
+
+- **Restricted entity list (excluding `LOCATION` and `DATE_TIME`)** because standard NER models frequently misclassify ordinary nouns and location names as entities. Redacting "Stockholm" or "Monday" as `<LOCATION>` and `<DATE_TIME>` distorts user intent and destroys answer accuracy.
+- **Typed placeholders instead of asterisks** because small language models like Phi-3 maintain coherent conversational context when they know an entity was an email or employee ID, without needing to see the raw sensitive value.
+- **Explicit `en_core_web_sm` NLP engine configuration** via Presidio's `NlpEngineProvider` to prevent Presidio from attempting to load the larger `en_core_web_lg` model, ensuring fast startup and low RAM overhead on developer machines.
+- **Fail-closed default** to prevent silent data exfiltration if the PII service crashes or spaCy encounters an unhandled tokenization error.
+- **Sanitizing only `user` messages** to preserve system prompts and instructions while guaranteeing privacy on user-provided inputs.
+
+### Mentor questions
+
+**Q1: Why did we explicitly exclude `LOCATION` and `DATE_TIME` from the entity list?**
+A: Off-the-shelf NER recognizers have high false-positive rates on common geographical names and temporal expressions. If a user asks "What is the capital of Germany?", redacting Germany into `<LOCATION>` prevents the model from knowing which country was asked about. Excluding them protects semantic meaning for both intent routing and answer generation.
+
+**Q2: What is the difference between fail-closed and fail-open in PII redaction?**
+A: In fail-closed mode (`PII_FAIL_MODE=closed`, default), any unhandled exception in Presidio causes the gateway to halt and return an HTTP 500 error, guaranteeing that raw sensitive text is never sent to the LLM backend. In fail-open mode, errors are logged and the raw text is passed through, prioritizing system uptime over absolute data privacy.
+
+**Q3: Why use typed placeholders like `<EMAIL_ADDRESS>` instead of simple masking like `[REDACTED]` or `***`?**
+A: Typed placeholders preserve the grammatical role and category of the redacted entity. The LLM can still infer that the user provided an email address or employee identifier and respond appropriately (e.g. "I have noted your employee ID"), without ever seeing the actual private identifier.
+
+**Q4: How do custom recognizers fit into Presidio's architecture?**
+A: Presidio's `PatternRecognizer` allows custom regexes or keyword deny-lists to be registered with the `AnalyzerEngine`. We registered `EMPLOYEE_ID` (`\bEMP-\d{5,7}\b`) and `PROJECT_CODENAME` alongside standard recognizers. Presidio executes all recognizers concurrently, resolves token overlaps using confidence scores, and outputs a unified list of detected entity spans.
+
+**Q5: Why does `test_end_to_end_gateway_pii_redaction` inspect the mock backend payload rather than just checking the API response?**
+A: Checking only the client-facing HTTP response does not guarantee that the backend didn't see the raw PII (for example, if redaction were mistakenly applied only to the output). Asserting on `mock_backend.generate.call_args` provides cryptographic proof that the payload transmitted to the model backend contained solely the sanitized `<EMAIL_ADDRESS>` string.
+
+### Verification command
+
+```bash
+uv run pytest gateway/tests/test_pii.py -v
+```
+
