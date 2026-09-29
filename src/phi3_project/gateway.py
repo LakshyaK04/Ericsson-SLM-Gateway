@@ -3,6 +3,7 @@ import httpx
 
 from .pii import redact_pii
 from .router import IntentRouter
+from .rag import RAGPipeline
 
 
 app = FastAPI(
@@ -14,6 +15,10 @@ app = FastAPI(
 VLLM_URL = "http://localhost:8000"
 
 router = IntentRouter()
+
+rag_pipeline = RAGPipeline(
+    "data/ericsson_rag_sample.pdf"
+)
 
 
 @app.get("/health")
@@ -34,7 +39,7 @@ async def chat_completions(request: dict):
                     message.get("content", "")
                 )
 
-        # 2. Determine intent
+        # 2. Get user's latest message
         user_messages = [
             message.get("content", "")
             for message in request.get("messages", [])
@@ -43,9 +48,31 @@ async def chat_completions(request: dict):
 
         user_query = user_messages[-1] if user_messages else ""
 
+        # 3. Determine intent
         routing_result = router.classify(user_query)
 
-        # 3. Forward sanitized request to vLLM
+        # 4. RAG route
+        if routing_result["intent"] == "rag":
+            rag_result = await rag_pipeline.generate(
+                user_query
+            )
+
+            return {
+                "object": "chat.completion",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": rag_result["answer"],
+                        },
+                    }
+                ],
+                "routing": routing_result,
+                "sources": rag_result["sources"],
+            }
+
+        # 5. Normal vLLM route
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{VLLM_URL}/v1/chat/completions",
@@ -60,7 +87,7 @@ async def chat_completions(request: dict):
 
         result = response.json()
 
-        # 4. Add routing information
+        # 6. Add routing information
         result["routing"] = routing_result
 
         return result
