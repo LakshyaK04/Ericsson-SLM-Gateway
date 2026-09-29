@@ -1,0 +1,36 @@
+{"question": "What does the Ericsson AI Platform provide?", "expected_substring": "deploying and operating artificial intelligence", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "How can small language models be served on the platform?", "expected_substring": "OpenAI-compatible API", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What does the serving layer manage?", "expected_substring": "manages model inference and accepts chat completion requests", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "How are documents processed in the ingestion pipeline?", "expected_substring": "extracting text, cleaning the text, and dividing it into smaller chunks", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What are document chunks converted into for semantic search?", "expected_substring": "converted into vector embeddings", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What two components are combined in RAG?", "expected_substring": "document retrieval with language model generation", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What should incoming user prompts be checked for?", "expected_substring": "personally identifiable information", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What can detected PII be replaced with?", "expected_substring": "anonymized placeholders", "doc_name": "ericsson_rag_sample.pdf"}
+{"question": "What architecture does the 3GPP 5G Core adopt?", "expected_substring": "cloud-native Service-Based Architecture", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What protocol and payload format do 5GC control plane NFs use?", "expected_substring": "HTTP/2 protocol and JavaScript Object Notation", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "Which interface connects the RAN control plane to the AMF?", "expected_substring": "N2 interface", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What signaling protocol is terminated by the AMF on the N1 interface?", "expected_substring": "Non-Access Stratum", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What responsibilities belong to the AMF?", "expected_substring": "registration management, connection management", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "Which network function selects and controls the UPF?", "expected_substring": "Session Management Function", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What is the role of the Network Repository Function (NRF)?", "expected_substring": "catalog of all active NF instances", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "How does the NSSF choose slice instances for users?", "expected_substring": "subscribed S-NSSAI", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What is the primary data path anchor in 5G networks?", "expected_substring": "User Plane Function (UPF) is the primary data path anchor", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "Which rules are used by the UPF for packet classification?", "expected_substring": "Packet Detection Rules (PDR)", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "Which interface connects the UPF to external Data Networks?", "expected_substring": "N6 interface", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "Which function handles billing usage reporting from the UPF?", "expected_substring": "Charging Function (CHF)", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What performance characteristics define SST 1?", "expected_substring": "Enhanced Mobile Broadband (eMBB)", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What latency requirement defines SST 2 URLLC slices?", "expected_substring": "sub-millisecond radio transit time", "doc_name": "ericsson_5g_core_architecture.pdf"}
+{"question": "What are operators transitioning to from Virtual Machines?", "expected_substring": "Containerized Network Functions (CNFs)", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "What demands distinguish telecom user plane workloads?", "expected_substring": "deterministic low latency and extreme packet throughput", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "How does SR-IOV present a physical PCIe NIC to containers?", "expected_substring": "multiple virtual devices (VFs)", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "How does DPDK eliminate kernel interrupt overhead?", "expected_substring": "user-space poll-mode drivers", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "At what layer does XDP provide in-kernel packet filtering?", "expected_substring": "device driver layer before socket buffers are allocated", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "Why do standard Kubernetes CNI plugins fall short in telco pods?", "expected_substring": "require multiple network interfaces", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "What meta-plugin attaches multiple network interfaces to a pod?", "expected_substring": "Multus CNI acts as a meta-plugin", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "What device plugins back secondary pod interfaces?", "expected_substring": "Macvlan, IPvlan, or SR-IOV device plugins", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "What security architecture governs telecom cloud infrastructure?", "expected_substring": "Zero-Trust Architecture (ZTA)", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "How is inter-service communication encrypted in telco cloud?", "expected_substring": "mutual Transport Layer Security (mTLS)", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "Which agents issue cryptographic identity certificates?", "expected_substring": "SPIFFE/SPIRE agents", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "How are metrics gathered in telco cloud observability?", "expected_substring": "Prometheus pull endpoints", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "How is distributed tracing propagated across queues?", "expected_substring": "W3C TraceContext propagation", "doc_name": "cloud_native_telecom_infrastructure.pdf"}
+{"question": "What probes provide real-time packet telemetry for anomaly detection?", "expected_substring": "eBPF probes for anomaly detection", "doc_name": "cloud_native_telecom_infrastructure.pdf"}

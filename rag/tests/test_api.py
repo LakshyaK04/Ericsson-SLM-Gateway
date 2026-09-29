@@ -24,6 +24,11 @@ def shared_models(tmp_path_factory):
     retriever = Retriever(test_store, emb_model, reranker, settings)
 
     import rag_service.main as main_mod
+    import rag_service.store as store_mod
+    import rag_service.retriever as ret_mod
+
+    store_mod._store = test_store
+    ret_mod._retriever = retriever
     main_mod.store = test_store
     main_mod.embedding_model = emb_model
     main_mod.reranker = reranker
@@ -34,12 +39,19 @@ def shared_models(tmp_path_factory):
     app.state.reranker = reranker
     app.state.retriever = retriever
 
-    return {
+    yield {
         "store": test_store,
         "embedding_model": emb_model,
         "reranker": reranker,
         "retriever": retriever,
     }
+
+    store_mod._store = None
+    ret_mod._retriever = None
+    main_mod.store = None
+    main_mod.embedding_model = None
+    main_mod.reranker = None
+    main_mod.retriever = None
 
 
 @pytest.fixture

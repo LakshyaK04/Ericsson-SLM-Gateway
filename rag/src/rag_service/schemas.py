@@ -41,6 +41,7 @@ class QueryRequest(BaseModel):
     retrieve_k: int = Field(default=20, ge=1, le=100)
     final_k: int = Field(default=3, ge=1, le=50)
     doc_ids: Optional[List[str]] = None
+    use_reranker: bool = Field(default=True, description="Whether to apply neural cross-encoder re-ranking.")
 
 
 class QueryResultItem(BaseModel):

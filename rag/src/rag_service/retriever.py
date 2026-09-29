@@ -39,6 +39,7 @@ class Retriever:
         retrieve_k: int = 20,
         final_k: int = 3,
         doc_ids: Optional[List[str]] = None,
+        use_reranker: bool = True,
     ) -> List[QueryResultItem]:
         """Execute two-stage retrieval and return re-ranked chunks with both scores.
 
@@ -48,9 +49,10 @@ class Retriever:
             retrieve_k: Number of initial candidates to pull from ChromaDB (default 20).
             final_k: Number of top re-ranked chunks to return (default 3).
             doc_ids: Optional list of document IDs to scope search.
+            use_reranker: Whether to apply neural cross-encoder re-ranking (default True).
 
         Returns:
-            List of QueryResultItem instances sorted by rerank_score descending.
+            List of QueryResultItem instances.
         """
         if not query or not query.strip():
             return []
@@ -71,12 +73,15 @@ class Retriever:
             logger.info("No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy)
             return []
 
-        # Stage 2: Cross-Encoder Re-Ranking
-        reranked = self.reranker.rerank(
-            query=query,
-            candidates=candidates,
-            top_k=final_k,
-        )
+        # Stage 2: Cross-Encoder Re-Ranking (optional)
+        if use_reranker:
+            reranked = self.reranker.rerank(
+                query=query,
+                candidates=candidates,
+                top_k=final_k,
+            )
+        else:
+            reranked = sorted(candidates, key=lambda c: c.get("dense_score", 0.0), reverse=True)[:final_k]
 
         # Convert to Pydantic items
         items = [

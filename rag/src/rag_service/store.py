@@ -190,7 +190,7 @@ _store: Optional[ChromaStore] = None
 def get_chroma_store(cfg: Optional[Settings] = None) -> ChromaStore:
     """Return or initialize the singleton ChromaStore."""
     global _store
-    if _store is None:
-        persist_dir = cfg.CHROMA_PERSIST_DIR if cfg else settings.CHROMA_PERSIST_DIR
+    persist_dir = cfg.CHROMA_PERSIST_DIR if cfg else settings.CHROMA_PERSIST_DIR
+    if _store is None or str(_store.persist_dir) != str(persist_dir):
         _store = ChromaStore(persist_dir)
     return _store

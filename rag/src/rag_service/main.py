@@ -47,10 +47,14 @@ async def lifespan(app: FastAPI):
     global store, embedding_model, reranker, retriever
     logger.info("Initializing RAG Service...")
 
-    store = get_chroma_store(settings)
-    embedding_model = get_embedding_model(settings)
-    reranker = get_reranker(settings)
-    retriever = get_retriever(store, embedding_model, reranker, settings)
+    if store is None:
+        store = get_chroma_store(settings)
+    if embedding_model is None:
+        embedding_model = get_embedding_model(settings)
+    if reranker is None:
+        reranker = get_reranker(settings)
+    if retriever is None:
+        retriever = get_retriever(store, embedding_model, reranker, settings)
 
     app.state.store = store
     app.state.embedding_model = embedding_model
@@ -254,6 +258,7 @@ async def query_documents(request: QueryRequest):
         retrieve_k=request.retrieve_k,
         final_k=request.final_k,
         doc_ids=request.doc_ids,
+        use_reranker=request.use_reranker,
     )
 
     return QueryResponse(
