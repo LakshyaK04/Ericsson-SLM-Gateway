@@ -490,5 +490,81 @@ uv run pytest rag/tests/ -v
 uv run python scripts/verify_phase6.py
 ```
 
+---
+
+## Phase 7: Docker, Documentation & Demo
+
+### What was built
+
+We packaged, documented, and automated the complete multi-service stack for turnkey enterprise delivery:
+
+1. **Enterprise Containerization (`gateway/Dockerfile`, `rag/Dockerfile`, `docker-compose.yml`)**:
+   - Pinned `python:3.10-slim` base images.
+   - Container hardening via dedicated non-root execution (`appuser`, UID 10001).
+   - Embedded Docker healthchecks for container orchestration probes.
+   - `docker-compose.yml` linking Gateway and RAG on a private bridge network (`ericsson-net`), with persistent named volumes for ChromaDB data (`chroma-data`) and HuggingFace model cache (`hf-cache`).
+   - Declared `depends_on.rag.condition: service_healthy` to guarantee deterministic boot ordering.
+   - Documented `nvidia-container-toolkit` GPU configuration for host environments.
+
+2. **System Architecture & Solution Documents (`docs/`)**:
+   - `docs/ARCHITECTURE.md`: Complete topology, sequence diagrams, loop prevention mechanics, fault tolerance, and vector storage structure.
+   - `docs/SOLUTION_GATEWAY.md`: Gateway architecture, OpenAI specification compliance, PII redaction pipeline with empirical evaluation (100% recall, 0% FPR), and BGE semantic router evaluation (93.8% accuracy, 0.55 threshold sweep).
+   - `docs/SOLUTION_RAG.md`: Ingestion architecture, chunking algorithm comparisons, ChromaDB persistent store, neural cross-encoder re-ranking, and empirical benchmark (Structure chunking: 100% Hit@1, MRR 1.0000).
+   - Updated service-level documentation: `gateway/README.md`, `rag/README.md`, and top-level `README.md`.
+
+3. **5-Minute Live Demo & Automation (`docs/DEMO_SCRIPT.md`, `scripts/demo.py`)**:
+   - `docs/DEMO_SCRIPT.md`: Step-by-step scripted narrative covering 6 scenes with exact `curl` payloads, expected JSON outputs, and mentor talking points.
+   - `scripts/demo.py`: Cross-platform interactive and automated CLI tool executing the entire live demo flow or displaying the empirical benchmark table (`--benchmark-only`).
+   - Transparently documented that GPU container execution is untested in this sandboxed environment, providing exact verification commands for physical host machines.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Non-Root Container Hardening** | Running container processes under an unprivileged user ID (e.g., UID 10001) rather than root, mitigating host compromise risks in the event of an application exploit. |
+| **Healthcheck Dependency (`service_healthy`)** | A Docker Compose configuration ensuring a dependent container only starts after its upstream dependency passes internal health verification probes. |
+| **Volume Persistence** | Storing vector databases and downloaded model weights in named Docker volumes so data survives container recreation without redownloading multi-gigabyte models. |
+| **Provenance Citation** | Explicitly mapping each claim in an LLM-synthesized answer back to the originating source file, page number, and chunk ID. |
+| **Scripted Demonstration** | A reproducible, timed presentation framework allowing developers to showcase core capabilities with deterministic inputs and clear mentor discussion topics. |
+
+### Why we did it this way
+
+- **Security Compliance with Non-Root Execution:** Enterprise environments and Kubernetes clusters enforce `runAsNonRoot: true`. Baking an unprivileged `appuser` directly into the Dockerfiles ensures seamless compliance.
+- **Boot Ordering via `service_healthy`:** Simply specifying `depends_on: [rag]` only waits for the container process to spawn, not for model weights and ChromaDB to initialize. Using `condition: service_healthy` guarantees that the RAG service is fully initialized before the Gateway accepts inbound traffic.
+- **Dedicated Volume for HuggingFace Cache:** Downloading Phi-3 Mini (~2.6GB) and BGE models on every container launch wastefully exhausts bandwidth and creates startup delays. Mounting `hf-cache` preserves downloaded models across restarts.
+- **Cross-Platform Python Demo Script:** Instead of relying exclusively on Unix bash scripts (`demo.sh`), `demo.py` runs natively across Windows, Linux, and macOS without shell dependencies.
+- **Honest Environmental Disclosure:** Adhering to Rule 2 of the Build Plan, we clearly documented that Docker GPU passthrough is untested in this sandboxed development container and provided exact instructions for running with `nvidia-container-toolkit`.
+
+### Mentor questions
+
+**Q1: Why is running containers as a non-root user critical for enterprise security?**
+A: By default, a process running as root inside a container shares the root UID (0) with the host kernel. If a vulnerability allows a container breakout, the attacker gains root control over the host system. Creating an unprivileged user (`appuser:10001`) ensures that even if an attacker compromises the Python process, their access remains tightly restricted inside the container namespace.
+
+**Q2: Why did we configure Docker Compose with `condition: service_healthy` instead of basic `depends_on`?**
+A: Basic `depends_on` only verifies that the container has entered the running state, which takes milliseconds. Heavy ML microservices require several seconds to load PyTorch weights, tokenizer vocabularies, and vector indexes into memory. By coupling `depends_on` to `service_healthy`, Docker Compose waits until the service's internal health check (`/health`) returns HTTP 200 before routing traffic to it.
+
+**Q3: How should an engineer run the Docker stack with GPU acceleration on a real host workstation?**
+A: On a host with an NVIDIA GPU, the engineer installs the NVIDIA Container Toolkit (`nvidia-container-toolkit`), configures the Docker runtime, and uncomments the `deploy.resources.reservations.devices` block in `docker-compose.yml`. This grants the Gateway container access to CUDA drivers and physical GPU memory.
+
+**Q4: What are the trade-offs of storing ChromaDB data and HuggingFace model cache in named Docker volumes?**
+A: Named volumes ensure persistence: document indexes are not lost when containers are rebuilt, and multi-gigabyte HuggingFace models do not need to be re-downloaded over the network. The trade-off is storage accumulation on the host disk, requiring explicit pruning commands (`docker volume rm`) when resetting test environments.
+
+**Q5: Why did we provide both an automated Python demo script and exact `curl` commands in `DEMO_SCRIPT.md`?**
+A: `curl` commands demonstrate protocol-level truth: an engineer can paste them into any terminal to inspect raw headers, HTTP status codes, and JSON response bodies without abstraction. `demo.py` provides convenience, colored formatting, timing measurements, and reproducible execution for structured 5-minute stakeholder demonstrations.
+
+### Verification command
+
+```bash
+# 1. Inspect Docker Compose configuration
+docker compose config
+
+# 2. Run the automated demonstration script in benchmark mode
+uv run python scripts/demo.py --benchmark-only
+
+# 3. View the 5-minute presentation script
+type docs\DEMO_SCRIPT.md
+```
+
+
 
 

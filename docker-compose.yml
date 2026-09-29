@@ -1,0 +1,89 @@
+services:
+  # ============================================================================
+  # RAG Service (Document Ingestion, Chunking, Vector Storage, Re-ranking)
+  # ============================================================================
+  rag:
+    build:
+      context: ./rag
+      dockerfile: Dockerfile
+    container_name: rag-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+      - GATEWAY_URL=http://gateway:8000
+      - EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
+      - RERANKER_MODEL_NAME=BAAI/bge-reranker-base
+      - DEFAULT_STRATEGY=structure
+      - RETRIEVE_K=20
+      - FINAL_K=3
+    volumes:
+      - chroma-data:/app/data/chroma
+      - hf-cache:/home/appuser/.cache/huggingface
+    networks:
+      - ericsson-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # SLM Gateway (API Front Door, PII Masking, Intent Router, Model Serving)
+  # ============================================================================
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: slm-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - BACKEND=${BACKEND:-hf_local}
+      - MODEL_ID=${MODEL_ID:-microsoft/Phi-3-mini-4k-instruct}
+      - QUANTIZE=${QUANTIZE:-4bit}
+      - ROUTER_THRESHOLD=${ROUTER_THRESHOLD:-0.55}
+      - PII_FAIL_MODE=${PII_FAIL_MODE:-closed}
+      - RAG_SERVICE_URL=http://rag:8001
+      - RAG_TIMEOUT_SECONDS=30.0
+    volumes:
+      - hf-cache:/home/appuser/.cache/huggingface
+    networks:
+      - ericsson-net
+    depends_on:
+      rag:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+    # GPU acceleration configuration (NVIDIA Container Toolkit):
+    # To run with GPU, uncomment the following block:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  ericsson-net:
+    name: ericsson-genai-network
+    driver: bridge
+
+volumes:
+  chroma-data:
+    name: ericsson-chroma-data
+  hf-cache:
+    name: ericsson-hf-cache
