@@ -1,59 +1,113 @@
-"""Tests for the RAG retrieval pipeline."""
+"""Tests for the two-stage RAG retrieval pipeline (ChromaStore + BGE Reranker)."""
 
-import os
-
+from pathlib import Path
 import pytest
 
-from rag_service.parsers import extract_text_from_pdf, clean_text
-from rag_service.chunking import chunk_text
+from rag_service.chunking.base import Chunk
+from rag_service.config import Settings
 from rag_service.embeddings import EmbeddingModel
-from rag_service.store import VectorStore
+from rag_service.reranker import Reranker
+from rag_service.retriever import Retriever
+from rag_service.store import ChromaStore
 
 
-# Resolve the sample PDF path relative to the repo root
-SAMPLE_PDF = os.path.join(
-    os.path.dirname(__file__),
-    "..", "..", "eval", "docs", "ericsson_rag_sample.pdf",
-)
+@pytest.fixture
+def tiny_corpus_retriever(tmp_path: Path):
+    """Set up an isolated ChromaStore with a controlled tiny corpus."""
+    store = ChromaStore(persist_dir=tmp_path / "chroma_tiny")
+    emb_model = EmbeddingModel("BAAI/bge-small-en-v1.5")
+    reranker = Reranker("BAAI/bge-reranker-base")
+    retriever = Retriever(store, emb_model, reranker)
 
+    # 4 distinct chunks across different topics
+    chunks = [
+        Chunk(
+            chunk_id="doc1_chunk_0",
+            text="Kubernetes pods use CNI plugins like Calico and Cilium for pod-to-pod networking.",
+            source="k8s.pdf",
+            page=1,
+            strategy="structure",
+        ),
+        Chunk(
+            chunk_id="doc1_chunk_1",
+            text="The 5G User Plane Function (UPF) processes packet inspection and QoS flow steering.",
+            source="5g_core.pdf",
+            page=1,
+            strategy="structure",
+        ),
+        Chunk(
+            chunk_id="doc1_chunk_2",
+            text="PostgreSQL utilizes multi-version concurrency control (MVCC) to ensure ACID transaction isolation.",
+            source="db.pdf",
+            page=2,
+            strategy="structure",
+        ),
+        Chunk(
+            chunk_id="doc1_chunk_3",
+            text="B-Tree indexes in relational databases provide logarithmic time complexity for range scans.",
+            source="db.pdf",
+            page=3,
+            strategy="structure",
+        ),
+    ]
 
-@pytest.mark.slow
-def test_retrieval():
-    """End-to-end retrieval: ingest a PDF, embed, search, rerank."""
-    text = extract_text_from_pdf(SAMPLE_PDF)
-    text = clean_text(text)
-
-    chunks = chunk_text(text)
-
-    assert len(chunks) > 0
-
-    embedding_model = EmbeddingModel()
-    chunk_embeddings = embedding_model.encode(chunks)
-
-    assert chunk_embeddings.shape[0] == len(chunks)
-    assert chunk_embeddings.shape[1] == 384
-
-    vector_store = VectorStore(
-        dimension=chunk_embeddings.shape[1]
+    # Embed and index
+    texts = [c.text for c in chunks]
+    embeddings = emb_model.encode_documents(texts)
+    store.add_chunks(
+        strategy="structure",
+        chunks=chunks,
+        embeddings=embeddings,
+        doc_id="test_corpus_doc",
     )
 
-    vector_store.add(chunk_embeddings, chunks)
+    return retriever, store
 
-    query = "How does RAG retrieve information from documents?"
-    query_embedding = embedding_model.encode([query])
 
-    results = vector_store.search(
-        query_embedding,
-        query,
-        top_k=2,
+def test_retriever_returns_top_ranked_chunk_with_both_scores(tiny_corpus_retriever):
+    """Retriever must return top-k chunks with dense_score and rerank_score."""
+    retriever, store = tiny_corpus_retriever
+
+    query = "What is the role of the 5G UPF in packet routing?"
+    results = retriever.retrieve(
+        query=query,
+        strategy="structure",
+        retrieve_k=4,
+        final_k=2,
     )
 
     assert len(results) == 2
-    assert "text" in results[0]
-    assert "faiss_score" in results[0]
-    assert "reranker_score" in results[0]
 
-    assert (
-        "RAG" in results[0]["text"]
-        or "retriev" in results[0]["text"].lower()
+    # Top result must be the 5G UPF chunk
+    top = results[0]
+    assert "UPF" in top.text
+    assert top.source == "5g_core.pdf"
+    assert top.page == 1
+    assert top.strategy == "structure"
+
+    # Both scores must be present and valid
+    assert 0.0 <= top.dense_score <= 1.0
+    assert isinstance(top.rerank_score, float)
+    # The top rerank score must be strictly higher than the second result
+    assert top.rerank_score >= results[1].rerank_score
+
+
+def test_retriever_scoped_by_doc_id(tiny_corpus_retriever):
+    """Scoped query with doc_ids filter only searches matching documents."""
+    retriever, store = tiny_corpus_retriever
+
+    # Query with non-matching doc_id
+    results = retriever.retrieve(
+        query="5G UPF",
+        strategy="structure",
+        doc_ids=["non_existent_doc"],
     )
+    assert len(results) == 0
+
+    # Query with matching doc_id
+    results_matched = retriever.retrieve(
+        query="5G UPF",
+        strategy="structure",
+        doc_ids=["test_corpus_doc"],
+    )
+    assert len(results_matched) > 0

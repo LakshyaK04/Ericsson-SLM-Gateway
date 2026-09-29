@@ -1,45 +1,74 @@
-"""Chunking module — selectable text-splitting strategies.
+"""Chunking module — selectable text-splitting strategies producing standardized Chunks."""
 
-Provides character, structure, and semantic chunking behind
-a single `chunk_text` dispatcher function.
-"""
+from typing import Any, Dict, List, Optional, Tuple
 
-from .character import character_chunking
-from .structure import structure_chunking
-from .semantic import semantic_chunking
+from .base import Chunk
+from .character import character_chunking, split_character_text
+from .structure import structure_chunking, split_structure_text
+from .semantic import semantic_chunking, split_semantic_text
 
 
-def chunk_text(
-    text: str,
-    strategy: str = "character",
-) -> list[str]:
-    """Select and apply a chunking strategy.
+def chunk_document(
+    pages: List[Tuple[int, str]],
+    source: str,
+    strategies: Optional[List[str]] = None,
+    embedding_model: Any = None,
+) -> Dict[str, List[Chunk]]:
+    """Chunk a multi-page document under multiple strategies.
 
     Args:
-        text: The document text to chunk.
-        strategy: One of 'character', 'structure', or 'semantic'.
+        pages: List of (page_number, text) tuples.
+        source: Name or identifier of the document.
+        strategies: List of strategies to apply ('character', 'structure', 'semantic').
+        embedding_model: Pre-loaded embedding model needed for 'semantic' chunking.
 
     Returns:
-        A list of text chunks.
-
-    Raises:
-        ValueError: If the strategy name is not recognised.
+        Dict mapping strategy name to list of Chunk objects.
     """
-    if strategy == "character":
-        return character_chunking(text)
+    target_strategies = strategies or ["character", "structure", "semantic"]
+    results: Dict[str, List[Chunk]] = {strat: [] for strat in target_strategies}
 
-    if strategy == "structure":
-        return structure_chunking(text)
+    for page_num, page_text in pages:
+        if not page_text or not page_text.strip():
+            continue
 
-    if strategy == "semantic":
-        return semantic_chunking(text)
+        if "character" in target_strategies:
+            char_chunks = character_chunking(
+                text=page_text,
+                source=source,
+                page=page_num,
+            )
+            results["character"].extend(char_chunks)
 
-    raise ValueError(f"Unknown chunking strategy: {strategy}")
+        if "structure" in target_strategies:
+            struct_chunks = structure_chunking(
+                text=page_text,
+                source=source,
+                page=page_num,
+            )
+            results["structure"].extend(struct_chunks)
+
+        if "semantic" in target_strategies:
+            if embedding_model is None:
+                raise ValueError("Embedding model is required for semantic chunking.")
+            sem_chunks = semantic_chunking(
+                text=page_text,
+                embedding_model=embedding_model,
+                source=source,
+                page=page_num,
+            )
+            results["semantic"].extend(sem_chunks)
+
+    return results
 
 
 __all__ = [
-    "chunk_text",
+    "Chunk",
+    "chunk_document",
     "character_chunking",
     "structure_chunking",
     "semantic_chunking",
+    "split_character_text",
+    "split_structure_text",
+    "split_semantic_text",
 ]

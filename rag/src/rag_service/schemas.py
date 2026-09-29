@@ -1,0 +1,63 @@
+"""Pydantic schemas for the RAG service API."""
+
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field
+
+
+class DocumentUploadResponse(BaseModel):
+    """Response returned upon successful document upload and chunking."""
+    doc_id: str
+    filename: str
+    chunk_counts: Dict[str, int]
+    total_chunks: int
+    message: str = "Document successfully ingested and indexed."
+
+
+class DocumentInfo(BaseModel):
+    """Metadata for an indexed document in the RAG store."""
+    doc_id: str
+    source: str
+    strategies: List[str]
+    total_chunks: int
+
+
+class DocumentListResponse(BaseModel):
+    """Response returned by GET /documents."""
+    documents: List[DocumentInfo]
+    total_documents: int
+
+
+class DeleteDocumentResponse(BaseModel):
+    """Response returned by DELETE /documents/{doc_id}."""
+    status: str = "deleted"
+    doc_id: str
+    chunks_removed: int
+
+
+class QueryRequest(BaseModel):
+    """Request body for POST /query."""
+    query: str = Field(..., min_length=1, description="Search query string.")
+    strategy: Literal["character", "structure", "semantic"] = "structure"
+    retrieve_k: int = Field(default=20, ge=1, le=100)
+    final_k: int = Field(default=3, ge=1, le=50)
+    doc_ids: Optional[List[str]] = None
+
+
+class QueryResultItem(BaseModel):
+    """Individual retrieved and re-ranked chunk with dense and reranker scores."""
+    chunk_id: str
+    text: str
+    source: str
+    page: int
+    strategy: str
+    dense_score: float
+    rerank_score: float
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class QueryResponse(BaseModel):
+    """Response body returned by POST /query."""
+    query: str
+    strategy: str
+    results: List[QueryResultItem]
+    total_retrieved: int

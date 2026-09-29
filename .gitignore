@@ -32,6 +32,8 @@ models/
 
 # ChromaDB persistence
 chroma_data/
+data/
+*.sqlite3
 
 # OS
 .DS_Store

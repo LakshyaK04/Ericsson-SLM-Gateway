@@ -255,3 +255,86 @@ uv run python eval/router_eval.py
 uv run python eval/pii_eval.py
 ```
 
+---
+
+## Phase 4: RAG Service
+
+### What was built
+
+We implemented the multi-strategy Hybrid RAG microservice in `rag/src/rag_service/`, running as an independent HTTP service on port 8001.
+
+We implemented the document chunking module with a unified `Chunk` dataclass (`chunk_id, text, source, page, strategy`):
+1. `character.py`: Splits text into fixed-size chunks (`chunk_size=500`, `overlap=50`) while snapping boundaries backwards to the nearest whitespace to avoid amputating words or symbols.
+2. `structure.py`: Splits along structural boundaries using a robust heading regex (Markdown `#`, numbered sections `1.1`, and ALL CAPS headers) and paragraph double-newlines, merging short sections up to 1000 characters and splitting oversized sections at sentence boundaries.
+3. `semantic.py`: Segments text into sentences, computes normalized dense embeddings using `BAAI/bge-small-en-v1.5`, and triggers new chunks when cosine similarity between adjacent sentences drops below `threshold=0.65`, subject to a 300-character minimum chunk size.
+4. `chunking/__init__.py`: Multi-page, multi-strategy document chunking dispatcher.
+
+We built document parsers in `parsers/`:
+1. `pdf.py`: PyMuPDF (`fitz`) text extraction on a per-page basis preserving 1-indexed page numbers. Rejects empty or scanned image-only PDFs with a 400 error (`"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)"`).
+2. `docx.py`: python-docx extraction preserving headings, paragraphs, and table text.
+3. `parsers/__init__.py`: Unified file format dispatcher validating `.pdf` and `.docx` extensions and rejecting unsupported file formats.
+
+We built the storage, embedding, and retrieval subsystems:
+1. `embeddings.py`: In-process `BAAI/bge-small-en-v1.5` dense embedding engine. Implements asymmetric query prefixing (`"Represent this sentence for searching relevant passages: "`) on user search queries while embedding document chunks without prefixes, L2-normalized.
+2. `store.py`: Embedded, persistent ChromaDB vector store (`chromadb.PersistentClient`) maintaining three isolated collections (`chunks_character`, `chunks_structure`, `chunks_semantic`) with metadata tracking (`doc_id, source, page, chunk_id, strategy`), supporting ingestion, dense querying, document listing, and atomic deletion across all collections.
+3. `reranker.py`: Neural cross-encoder `BAAI/bge-reranker-base` re-ranking candidate chunks against the search query, outputting relevance scores.
+4. `retriever.py`: Two-stage hybrid retriever: Stage 1 retrieves `retrieve_k=20` dense candidates from ChromaDB; Stage 2 applies the cross-encoder to return the top `final_k=3` chunks with both `dense_score` and `rerank_score`.
+
+We implemented the FastAPI application in `main.py`:
+- `POST /documents`: Multipart file upload, multi-strategy chunking, embedding, and Chroma indexing.
+- `GET /documents`: Lists indexed documents and their chunk distributions.
+- `DELETE /documents/{doc_id}`: Atomically deletes document chunks across all Chroma collections.
+- `POST /query`: Two-stage retrieval returning top-k re-ranked chunks with dual scores.
+- `GET /health`: Liveness probe reporting healthy status and registered collections.
+
+We verified the service with 15 passing tests (`test_chunking.py`, `test_parsers.py`, `test_retrieval.py`, `test_api.py`) and executed live verification uploading `ericsson_rag_sample.pdf` and querying the service.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Cross-Encoder Re-Ranking** | A neural architecture where query and passage are concatenated and processed jointly across all transformer layers, enabling deep token-to-token cross-attention for high-precision ranking. |
+| **Dense Retrieval** | Locating candidate passages by computing cosine similarity between dense vector embeddings of the query and pre-indexed chunks in a vector database. |
+| **BGE Query Instruction Prefix** | A specific task instruction prompt (`"Represent this sentence for searching relevant passages: "`) prepended to search queries to align query embeddings with passage representations. |
+| **Multi-Strategy Chunking** | Indexing the same source text simultaneously across different segmentation strategies (character, structure, semantic) to enable empirical retrieval evaluation. |
+| **ChromaDB Persistent Client** | An embedded vector database persisting HNSW vector indexes and document metadata directly to local disk without requiring external database servers. |
+
+### Why we did it this way
+
+- **Two-stage retrieval (retrieve 20, rerank 3)** because dense vector search is fast (~5ms) and casts a wide net over large corpora, while the cross-encoder is computationally heavier (~30ms) but delivers superior ranking accuracy, filtering out irrelevant dense matches.
+- **Asymmetric query instruction prefixing** because BGE models are trained with contrastive learning where queries require task instructions while documents represent raw unadorned content.
+- **Isolated Chroma collections per chunking strategy** ensuring that character, structure, and semantic chunks never compete for vector slots in the same index, enabling unbiased comparative evaluation in Phase 5.
+- **Snapping character chunk boundaries to whitespace** preventing split words, truncated variable names, or damaged acronyms at chunk edges.
+- **Failing early on empty or image-only PDFs** informing users immediately that OCR is not supported rather than silently creating an empty document index.
+
+### Mentor questions
+
+**Q1: Why do we use a two-stage retrieval pipeline (dense search + cross-encoder) instead of returning top dense search matches directly?**
+A: Bi-encoders map query and document independently to fixed vectors, meaning words in the query cannot directly attend to words in the passage. Dense search is very fast for narrowing down thousands of chunks to 20 candidates. The cross-encoder (`bge-reranker-base`) feeds query and passage together through deep cross-attention, capturing subtle syntactic relationships and eliminating false-positive dense matches.
+
+**Q2: Why does the embedding model prefix queries with `"Represent this sentence for searching relevant passages: "` but leaves documents unprefixed?**
+A: The BAAI BGE model family was trained with asymmetric contrastive learning. Queries are short and ambiguous, so the task-specific instruction prefix tells the model to project the query into the semantic retrieval space of relevant passages. Passages represent factual corpus data and must be embedded without task instructions.
+
+**Q3: How do the three chunking strategies differ in their segmentation logic and intended use cases?**
+A: Character chunking cuts text at fixed length intervals snapping to whitespace (good for uniform corpora without headings); structure chunking splits on Markdown, numbered headings, and paragraph boundaries (ideal for technical manuals and formatted documentation); semantic chunking computes sentence embeddings and splits at semantic distance drops (ideal for unstructured, narrative text).
+
+**Q4: Why does `ChromaStore` maintain three separate collections (`chunks_character`, `chunks_structure`, `chunks_semantic`) instead of one collection with a metadata flag?**
+A: Separate collections ensure that HNSW vector graph indexes and cosine distance spaces are isolated per strategy. This prevents chunks from one strategy from crowding out candidates during dense retrieval, enabling completely independent benchmarking in Phase 5.
+
+**Q5: What error occurs if an uploaded PDF contains only scanned images, and why fail at upload time?**
+A: The parser computes total extracted characters across all pages. If total characters is 0, it raises a 400 error: "No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)." Failing early prevents indexing empty ghost documents and gives clear, actionable feedback to users.
+
+### Verification command
+
+```bash
+# 1. Run all RAG unit and integration tests (15 passing tests)
+uv run pytest rag/tests/ -v
+
+# 2. Upload public PDF and query top chunks with both scores
+uv run python -c "
+import httpx
+client = httpx.Client(base_url='http://127.0.0.1:8001')
+print('Health:', client.get('/health').json())
+"
+```
+

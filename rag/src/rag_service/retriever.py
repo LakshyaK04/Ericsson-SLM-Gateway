@@ -1,51 +1,116 @@
-"""RAG retrieval pipeline.
+"""Two-stage hybrid retriever: dense vector search followed by neural cross-encoder re-ranking.
 
-Loads a PDF, chunks it, embeds the chunks, stores them in a
-vector store, and provides retrieval with cross-encoder reranking.
+Per Section 5.5:
+1. Dense Retrieval: Retrieve top retrieve_k (default 20) chunks from ChromaDB using BGE embeddings.
+2. Cross-Encoder Re-Ranking: Re-rank the candidates using BAAI/bge-reranker-base to return top final_k (default 3).
 """
 
 import logging
+from typing import Any, Dict, List, Optional
 
-from rag_service.parsers import extract_text_from_pdf, clean_text
-from rag_service.chunking import chunk_text
-from rag_service.embeddings import EmbeddingModel
-from rag_service.store import VectorStore
+from .config import Settings, settings
+from .embeddings import EmbeddingModel, get_embedding_model
+from .reranker import Reranker, get_reranker
+from .schemas import QueryResultItem
+from .store import ChromaStore, get_chroma_store
 
 logger = logging.getLogger(__name__)
 
 
-class RAGPipeline:
-    """End-to-end retrieval pipeline for a single PDF document."""
+class Retriever:
+    """Two-stage retriever combining dense search with cross-encoder re-ranking."""
 
     def __init__(
         self,
-        pdf_path: str,
-        chunking_strategy: str = "character",
+        store: Optional[ChromaStore] = None,
+        embedding_model: Optional[EmbeddingModel] = None,
+        reranker: Optional[Reranker] = None,
+        config: Optional[Settings] = None,
     ):
-        # 1. Load and clean the PDF text
-        text = extract_text_from_pdf(pdf_path)
-        text = clean_text(text)
+        self.config = config or settings
+        self.store = store or get_chroma_store(self.config)
+        self.embedding_model = embedding_model or get_embedding_model(self.config)
+        self.reranker = reranker or get_reranker(self.config)
 
-        # 2. Create chunks using the selected strategy
-        self.chunks = chunk_text(text, chunking_strategy)
+    def retrieve(
+        self,
+        query: str,
+        strategy: str = "structure",
+        retrieve_k: int = 20,
+        final_k: int = 3,
+        doc_ids: Optional[List[str]] = None,
+    ) -> List[QueryResultItem]:
+        """Execute two-stage retrieval and return re-ranked chunks with both scores.
 
-        # 3. Create embeddings for all chunks
-        self.embedding_model = EmbeddingModel()
-        embeddings = self.embedding_model.encode(self.chunks)
+        Args:
+            query: User search query.
+            strategy: Chunking strategy to query ('character', 'structure', 'semantic').
+            retrieve_k: Number of initial candidates to pull from ChromaDB (default 20).
+            final_k: Number of top re-ranked chunks to return (default 3).
+            doc_ids: Optional list of document IDs to scope search.
 
-        # 4. Build the vector store and index the chunks
-        self.vector_store = VectorStore(
-            dimension=embeddings.shape[1]
+        Returns:
+            List of QueryResultItem instances sorted by rerank_score descending.
+        """
+        if not query or not query.strip():
+            return []
+
+        # Stage 1: Dense Retrieval
+        # Encode query with BGE instruction prefix
+        query_embedding = self.embedding_model.encode_query(query)
+
+        # Pull top retrieve_k candidates from Chroma
+        candidates = self.store.query(
+            strategy=strategy,
+            query_embedding=query_embedding,
+            n_results=retrieve_k,
+            doc_ids=doc_ids,
         )
-        self.vector_store.add(embeddings, self.chunks)
 
-    def retrieve(self, query: str, top_k: int = 3):
-        """Retrieve the top-k most relevant chunks for a query."""
-        query_embedding = self.embedding_model.encode([query])
+        if not candidates:
+            logger.info("No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy)
+            return []
 
-        return self.vector_store.search(
-            query_embedding,
-            query,
-            top_k=top_k,
-            candidate_k=5,
+        # Stage 2: Cross-Encoder Re-Ranking
+        reranked = self.reranker.rerank(
+            query=query,
+            candidates=candidates,
+            top_k=final_k,
         )
+
+        # Convert to Pydantic items
+        items = [
+            QueryResultItem(
+                chunk_id=c["chunk_id"],
+                text=c["text"],
+                source=c.get("source", ""),
+                page=c.get("page", 1),
+                strategy=c.get("strategy", strategy),
+                dense_score=c.get("dense_score", 0.0),
+                rerank_score=c.get("rerank_score", 0.0),
+            )
+            for c in reranked
+        ]
+
+        return items
+
+
+_retriever: Optional[Retriever] = None
+
+
+def get_retriever(
+    store: Optional[ChromaStore] = None,
+    embedding_model: Optional[EmbeddingModel] = None,
+    reranker: Optional[Reranker] = None,
+    cfg: Optional[Settings] = None,
+) -> Retriever:
+    """Return or initialize the singleton Retriever."""
+    global _retriever
+    if _retriever is None or store is not None:
+        _retriever = Retriever(
+            store=store,
+            embedding_model=embedding_model,
+            reranker=reranker,
+            config=cfg or settings,
+        )
+    return _retriever
