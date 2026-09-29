@@ -1,6 +1,6 @@
 # Intent Router Evaluation Report
 
-**Date:** 2026-09-30 02:50:44
+**Date:** 2026-09-30 02:58:04
 **Model:** `BAAI/bge-small-en-v1.5` (sentence-transformers)
 **Scoring Strategy:** Mean of top-3 cosine similarities per intent
 **Configured Threshold:** `0.55` (Fallback intent: `general`)
@@ -11,7 +11,7 @@
 ## 1. Executive Summary
 
 - **Overall Accuracy:** `93.75%` (60 / 64 correct)
-- **Mean Classification Latency:** `88.79 ms` (P50: `82.35 ms`, P95: `104.03 ms`)
+- **Mean Classification Latency:** `66.83 ms` (P50: `60.84 ms`, P95: `79.38 ms`)
 - **Exemplar Leakage:** `0 duplicates` verified between evaluation set and training exemplars.
 
 ---
