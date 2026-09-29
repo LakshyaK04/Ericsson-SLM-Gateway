@@ -1,14 +1,26 @@
-﻿from .ingestion import (
-    extract_text_from_pdf,
-    clean_text,
+"""Tests for the RAG retrieval pipeline."""
+
+import os
+
+import pytest
+
+from rag_service.parsers import extract_text_from_pdf, clean_text
+from rag_service.chunking import chunk_text
+from rag_service.embeddings import EmbeddingModel
+from rag_service.store import VectorStore
+
+
+# Resolve the sample PDF path relative to the repo root
+SAMPLE_PDF = os.path.join(
+    os.path.dirname(__file__),
+    "..", "..", "eval", "docs", "ericsson_rag_sample.pdf",
 )
-from .chunking import chunk_text
-from .embeddings import EmbeddingModel
-from .vector_store import VectorStore
 
 
+@pytest.mark.slow
 def test_retrieval():
-    text = extract_text_from_pdf("data/ericsson_rag_sample.pdf")
+    """End-to-end retrieval: ingest a PDF, embed, search, rerank."""
+    text = extract_text_from_pdf(SAMPLE_PDF)
     text = clean_text(text)
 
     chunks = chunk_text(text)
@@ -25,10 +37,7 @@ def test_retrieval():
         dimension=chunk_embeddings.shape[1]
     )
 
-    vector_store.add(
-        chunk_embeddings,
-        chunks,
-    )
+    vector_store.add(chunk_embeddings, chunks)
 
     query = "How does RAG retrieve information from documents?"
     query_embedding = embedding_model.encode([query])

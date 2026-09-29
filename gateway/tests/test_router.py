@@ -1,7 +1,10 @@
-from .router import IntentRouter
+"""Tests for the intent router."""
+
+from slm_gateway.router import IntentRouter
 
 
 def test_router_intents():
+    """Each test query should be classified to the expected intent."""
     router = IntentRouter()
 
     test_cases = [
@@ -23,4 +26,7 @@ def test_router_intents():
 
     for query, expected in test_cases:
         result = router.classify(query)
-        assert result["intent"] == expected
+        assert result["intent"] == expected, (
+            f"Query: {query!r} — expected {expected!r}, "
+            f"got {result['intent']!r}"
+        )

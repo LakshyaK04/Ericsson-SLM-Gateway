@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.egg-info/
 
 # Virtual environment
 .venv/
@@ -10,7 +11,7 @@ env/
 
 # Environment variables / secrets
 .env
-.env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -29,10 +30,12 @@ htmlcov/
 huggingface/
 models/
 
+# ChromaDB persistence
+chroma_data/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Explicitly track uv lockfile for reproducibility
 !uv.lock
-
