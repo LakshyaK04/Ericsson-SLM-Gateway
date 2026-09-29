@@ -1,0 +1,45 @@
+{"text": "Please reach out to Alexander Hamilton regarding the budget allocation.", "expected_entities": ["PERSON"]}
+{"text": "Yesterday Dr. Jane Goodall presented her research on primate behavior.", "expected_entities": ["PERSON"]}
+{"text": "Software architect Robert Taylor submitted the design proposal.", "expected_entities": ["PERSON"]}
+{"text": "Did Leonardo da Vinci paint the Mona Lisa in Florence?", "expected_entities": ["PERSON"]}
+{"text": "Please schedule a meeting with senior engineer Carlos Santana.", "expected_entities": ["PERSON"]}
+{"text": "Send the invoice directly to alice.smith@ericsson.com for processing.", "expected_entities": ["EMAIL_ADDRESS"]}
+{"text": "For support inquiries please contact dev-team.leads+urgent@service.subdomain.org.", "expected_entities": ["EMAIL_ADDRESS"]}
+{"text": "My personal email is bob_miller99@gmail.com if needed.", "expected_entities": ["EMAIL_ADDRESS"]}
+{"text": "Notification sent from noreply-alerts@telecom-infra.se to admin.", "expected_entities": ["EMAIL_ADDRESS"]}
+{"text": "Reach our recruitment desk at careers.global@ericsson.com immediately.", "expected_entities": ["EMAIL_ADDRESS"]}
+{"text": "Call our hotline at +1-555-234-5678 for 24/7 technical assistance.", "expected_entities": ["PHONE_NUMBER"]}
+{"text": "My direct desk phone number is (212) 555-0199.", "expected_entities": ["PHONE_NUMBER"]}
+{"text": "Dial +46-8-555-1234 to reach our Stockholm office.", "expected_entities": ["PHONE_NUMBER"]}
+{"text": "Emergency contact number is 800-555-4321.", "expected_entities": ["PHONE_NUMBER"]}
+{"text": "Please call +44 20 7946 0912 to confirm your appointment.", "expected_entities": ["PHONE_NUMBER"]}
+{"text": "Process payment with corporate card 4532-0151-1283-0366 before Friday.", "expected_entities": ["CREDIT_CARD"]}
+{"text": "Customer used MasterCard 5500-0000-0000-0004 for the cloud subscription.", "expected_entities": ["CREDIT_CARD"]}
+{"text": "Billed to American Express 3782-822463-10005 on Monday.", "expected_entities": ["CREDIT_CARD"]}
+{"text": "Refund issued to Discover card 6011-0009-9013-9424.", "expected_entities": ["CREDIT_CARD"]}
+{"text": "Card number 4111-1111-1111-1111 was declined by the payment gateway.", "expected_entities": ["CREDIT_CARD"]}
+{"text": "The internal database host is reachable at 192.168.1.100 port 5432.", "expected_entities": ["IP_ADDRESS"]}
+{"text": "SSH service is listening on bastion IP 10.240.12.88.", "expected_entities": ["IP_ADDRESS"]}
+{"text": "Public gateway IP address is 198.51.100.42.", "expected_entities": ["IP_ADDRESS"]}
+{"text": "Traffic redirected to DNS resolver 8.8.8.8.", "expected_entities": ["IP_ADDRESS"]}
+{"text": "Cluster control plane node IP is 172.16.254.1.", "expected_entities": ["IP_ADDRESS"]}
+{"text": "Lead architect EMP-12345 submitted the pull request.", "expected_entities": ["EMPLOYEE_ID"]}
+{"text": "Badge access granted for employee EMP-987654 at gate 3.", "expected_entities": ["EMPLOYEE_ID"]}
+{"text": "Staff ID EMP-5555555 completed the security compliance training.", "expected_entities": ["EMPLOYEE_ID"]}
+{"text": "Assigned incident ticket to technician EMP-44332.", "expected_entities": ["EMPLOYEE_ID"]}
+{"text": "System administrator EMP-800213 requested elevated credentials.", "expected_entities": ["EMPLOYEE_ID"]}
+{"text": "The confidential architecture for Project-Titan was presented to executives.", "expected_entities": ["PROJECT_CODENAME"]}
+{"text": "Hardware delivery for Project-Apollo is scheduled for next quarter.", "expected_entities": ["PROJECT_CODENAME"]}
+{"text": "Security audit findings for Project-Odin must remain strictly confidential.", "expected_entities": ["PROJECT_CODENAME"]}
+{"text": "Engineering teams are consolidating milestones for Project-Thor.", "expected_entities": ["PROJECT_CODENAME"]}
+{"text": "Deployment verification for Project-Aegis passed all performance gates.", "expected_entities": ["PROJECT_CODENAME"]}
+{"text": "What is the capital of Germany?", "expected_entities": []}
+{"text": "The annual summit will be held on Monday at 3 PM in Stockholm.", "expected_entities": []}
+{"text": "Explain photosynthesis and how chlorophyll absorbs solar radiation.", "expected_entities": []}
+{"text": "What does an HTTP 404 Not Found status code indicate?", "expected_entities": []}
+{"text": "How do I implement binary search in Python without recursion?", "expected_entities": []}
+{"text": "The flight lands in Tokyo on October 15 at 18:30.", "expected_entities": []}
+{"text": "Describe the difference between synchronous and asynchronous operations.", "expected_entities": []}
+{"text": "Why do leaves change color during the autumn season?", "expected_entities": []}
+{"text": "The speed of light in vacuum is approximately 299,792,458 meters per second.", "expected_entities": []}
+{"text": "Explain the architectural components of a 5G core network.", "expected_entities": []}

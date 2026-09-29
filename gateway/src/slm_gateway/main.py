@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from .backends import LLMBackend, get_backend
 from .config import settings
 from .pii import PIIRedactionError, PIIRedactor, get_redactor
+from .router import IntentRouter, RoutingResult, get_router
 from .schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -30,18 +31,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Backend & PII instances
+# Backend, PII & Router instances
 backend: Optional[LLMBackend] = None
 pii_redactor: Optional[PIIRedactor] = None
+router_instance: Optional[IntentRouter] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model backend and PII redactor once at startup per rule 5."""
-    global backend, pii_redactor
+    """Load model backend, PII redactor, and intent router once at startup per rule 5."""
+    global backend, pii_redactor, router_instance
     logger.info("Initializing SLM Gateway PII redactor...")
-    pii_redactor = get_redactor(settings)
+    try:
+        pii_redactor = get_redactor(settings)
+    except Exception as e:
+        logger.error("Failed to load PII redactor: %s", str(e), exc_info=True)
     app.state.pii_redactor = pii_redactor
+
+    logger.info("Initializing SLM Gateway Intent router...")
+    try:
+        router_instance = get_router(settings)
+    except Exception as e:
+        logger.error("Failed to load Intent router: %s", str(e), exc_info=True)
+    app.state.router = router_instance
 
     logger.info("Initializing SLM Gateway backend: %s...", settings.BACKEND)
     backend = get_backend(settings)
@@ -131,17 +143,35 @@ async def health():
 
 @app.get("/ready")
 async def ready():
-    """Readiness probe: 200 only when model is fully loaded."""
-    if backend is not None and backend.is_ready():
+    """Readiness probe: 200 only when model backend and router are fully loaded per section 4."""
+    global router_instance
+    if router_instance is None:
+        try:
+            router_instance = get_router(settings)
+        except Exception as e:
+            logger.warning("Router not initialized yet: %s", e)
+
+    backend_ready = backend is not None and backend.is_ready()
+    router_ready = router_instance is not None
+
+    if backend_ready and router_ready:
         return {
             "status": "ready",
             "backend": backend.get_model_name(),
+            "router": settings.ROUTER_MODEL_NAME,
         }
+
+    missing = []
+    if not backend_ready:
+        missing.append("model backend")
+    if not router_ready:
+        missing.append("intent router")
+
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail={
             "error": {
-                "message": "Model backend is not loaded or ready.",
+                "message": f"Service not ready. Missing: {', '.join(missing)}.",
                 "type": "service_unavailable",
                 "code": 503,
             }
@@ -227,6 +257,50 @@ async def chat_completions(
                 )
         sanitized_messages.append(msg_dict)
 
+    # 2. Semantic Intent Routing
+    x_routing: Optional[dict] = None
+    bypass = x_bypass_router is not None and x_bypass_router.strip().lower() in ("true", "1")
+
+    if bypass:
+        x_routing = {
+            "intent": "bypass",
+            "confidence": 1.0,
+            "route": "hf_local",
+            "latency_ms": 0.0,
+        }
+    else:
+        # Extract latest user message for classification
+        user_queries = [
+            m.get("content", "") for m in sanitized_messages if m.get("role") == "user"
+        ]
+        query_to_route = user_queries[-1] if user_queries else ""
+
+        router = router_instance or get_router(settings)
+        route_result = router.classify(query_to_route)
+        x_routing = route_result.to_dict()
+
+        # Apply intent effects per section 5.3
+        if route_result.intent == "structured_json":
+            has_system = False
+            for m in sanitized_messages:
+                if m.get("role") == "system":
+                    m["content"] = f"{m['content']}\n\n{settings.STRUCTURED_JSON_SYSTEM_PROMPT}"
+                    has_system = True
+                    break
+            if not has_system:
+                sanitized_messages.insert(
+                    0,
+                    {
+                        "role": "system",
+                        "content": settings.STRUCTURED_JSON_SYSTEM_PROMPT,
+                    },
+                )
+
+        elif route_result.intent == "rag":
+            # Phase 3 fallback notice prior to Phase 6 RAG integration
+            x_routing["warning"] = "RAG service offline; fell back to local model."
+            x_routing["route"] = "hf_local"
+
     try:
         content, prompt_tokens, completion_tokens, finish_reason = await backend.generate(
             messages=sanitized_messages,
@@ -263,5 +337,6 @@ async def chat_completions(
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
         ),
+        x_routing=x_routing,
         x_pii={"redactions": total_redactions},
     )

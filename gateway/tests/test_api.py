@@ -35,14 +35,33 @@ class MockBackend(LLMBackend):
         self._loaded = False
 
 
+class MockRouter:
+    def __init__(self, ready: bool = True):
+        self.ready = ready
+
+    def classify(self, query: str):
+        from slm_gateway.router import RoutingResult
+        return RoutingResult(
+            intent="general",
+            confidence=0.95,
+            route="hf_local",
+            latency_ms=1.2,
+            scores_by_intent={"general": 0.95, "technical": 0.4, "structured_json": 0.3, "rag": 0.2},
+            fallback_applied=False,
+        )
+
+
 @pytest.fixture(autouse=True)
 def setup_mock_backend(monkeypatch):
-    """Ensure a fast mock backend is attached to the app for unit tests."""
-    mock = MockBackend(ready=True)
+    """Ensure a fast mock backend and mock router are attached to the app for unit tests."""
+    mock_b = MockBackend(ready=True)
+    mock_r = MockRouter(ready=True)
     import slm_gateway.main as main_mod
-    monkeypatch.setattr(main_mod, "backend", mock)
-    app.state.backend = mock
-    yield mock
+    monkeypatch.setattr(main_mod, "backend", mock_b)
+    monkeypatch.setattr(main_mod, "router_instance", mock_r)
+    app.state.backend = mock_b
+    app.state.router = mock_r
+    yield mock_b
 
 
 @pytest.fixture
@@ -184,3 +203,71 @@ def test_auth_enforced_when_key_configured(client, monkeypatch):
         headers={"Authorization": "Bearer ericsson-secret-key-123"},
     )
     assert resp_correct.status_code == 200
+
+
+def test_chat_completions_includes_routing_metadata(client):
+    """Chat completions response must include x_routing metadata."""
+    payload = {"messages": [{"role": "user", "content": "What is Python?"}]}
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "x_routing" in data
+    assert data["x_routing"]["intent"] == "general"
+    assert "confidence" in data["x_routing"]
+    assert "route" in data["x_routing"]
+    assert "latency_ms" in data["x_routing"]
+
+
+def test_chat_completions_bypass_router_header(client):
+    """X-Bypass-Router header skips semantic routing."""
+    payload = {"messages": [{"role": "user", "content": "What is Python?"}]}
+    resp = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"X-Bypass-Router": "true"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["x_routing"] == {
+        "intent": "bypass",
+        "confidence": 1.0,
+        "route": "hf_local",
+        "latency_ms": 0.0,
+    }
+
+
+def test_structured_json_intent_injects_system_prompt(client, monkeypatch):
+    """When router classifies as structured_json, a strict JSON system prompt is injected."""
+    from unittest.mock import AsyncMock
+    from slm_gateway.router import RoutingResult
+
+    class JsonMockRouter:
+        def classify(self, query: str):
+            return RoutingResult(
+                intent="structured_json",
+                confidence=0.88,
+                route="hf_local",
+                latency_ms=2.0,
+            )
+
+    import slm_gateway.main as main_mod
+    monkeypatch.setattr(main_mod, "router_instance", JsonMockRouter())
+
+    # Spy on backend.generate to verify received payload
+    received_messages = []
+    original_generate = main_mod.backend.generate
+
+    async def spy_generate(messages, **kwargs):
+        received_messages.extend(messages)
+        return "{}", 10, 5, "stop"
+
+    monkeypatch.setattr(main_mod.backend, "generate", spy_generate)
+
+    payload = {"messages": [{"role": "user", "content": "Return data as JSON"}]}
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    assert len(received_messages) == 2
+    assert received_messages[0]["role"] == "system"
+    assert "valid JSON" in received_messages[0]["content"]
+    assert received_messages[1]["role"] == "user"
+

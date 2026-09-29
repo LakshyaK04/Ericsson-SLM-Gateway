@@ -173,3 +173,85 @@ A: Checking only the client-facing HTTP response does not guarantee that the bac
 uv run pytest gateway/tests/test_pii.py -v
 ```
 
+---
+
+## Phase 3: Intent Router and its Evaluation
+
+### What was built
+
+We implemented the semantic intent routing subsystem in `gateway/src/slm_gateway/router.py`, driven by `BAAI/bge-small-en-v1.5` dense sentence embeddings via `sentence-transformers`, with an exemplar bank defined in `gateway/src/slm_gateway/intents.yaml`.
+
+We established 4 intent classes with 28 diverse exemplars each (112 exemplars total):
+1. `general`: World knowledge, history, philosophy, trivia, conversational chit-chat, and creative inquiries.
+2. `technical`: Software engineering, networking protocols, databases, architectures, cloud infrastructure, and algorithms.
+3. `structured_json`: Demands for strict JSON schema output, serialized payloads, and key-value structured data.
+4. `rag`: Grounded questions targeting uploaded documents, PDFs, employee handbooks, specifications, and internal policies.
+
+We implemented a mean top-3 cosine similarity aggregation algorithm: for each intent, similarity scores against all its exemplars are sorted descending and the average of the top 3 is computed. If the top scoring intent is below `ROUTER_THRESHOLD` (default 0.55), the router falls back to `general` with `fallback_applied=True`.
+
+We integrated the router into `gateway/src/slm_gateway/main.py`:
+- Loaded `IntentRouter` once in the FastAPI lifespan handler, precomputing and normalizing all exemplar embeddings on startup.
+- Handled the `X-Bypass-Router: true` header to skip embedding computation and routing latency when downstream services or direct calls bypass routing.
+- Automatically applied route effects:
+  - When `structured_json` is classified, the gateway automatically injects or appends `settings.STRUCTURED_JSON_SYSTEM_PROMPT` into the messages, forcing valid raw JSON generation without conversational preamble.
+  - When `rag` is classified, the gateway prepares routing to the RAG service, with graceful fallback to `hf_local` if the RAG service is unreachable.
+- Appended `x_routing{intent, confidence, route, latency_ms}` metadata to every `ChatCompletionResponse`.
+- Updated `/ready` probe to require both the model backend and the intent router before returning HTTP 200.
+
+We built two comprehensive evaluation pipelines:
+1. `eval/router_eval.py` & `eval/datasets/router_eval.jsonl`:
+   - 64 labeled queries (16 per intent) designed with tricky ambiguous edge cases (technical queries mentioning documents, JSON queries about networking, biographical queries with numbers).
+   - Automated duplicate leakage validator asserting 0 overlap between eval queries and training exemplars.
+   - Evaluated overall accuracy (93.75%), per-intent precision/recall/F1, a 4x4 confusion matrix, and a threshold sweep from 0.30 to 0.80 confirming 0.55 is the optimal operating threshold. Saved to `eval/results/router_report.md`.
+2. `eval/pii_eval.py` & `eval/datasets/pii_eval.jsonl`:
+   - 45 test queries evaluating entity recall across 7 entity categories (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`, `EMPLOYEE_ID`, `PROJECT_CODENAME`) and false positive rate on clean text.
+   - Demonstrated 100.0% PII recall (35/35) and 0.00% False Positive Rate (0/10). Saved to `eval/results/pii_report.md`.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Few-Shot Semantic Routing** | Classifying user intent by calculating vector similarity between the query and a bank of exemplar queries in embedding space, requiring zero fine-tuning or retraining. |
+| **Top-3 Mean Aggregation** | Averaging the top 3 highest similarity scores for each intent class instead of using 1-Nearest-Neighbor, smoothing out lexical flukes and idiosyncratic phrasing. |
+| **Threshold Sweep** | Evaluating classification accuracy and fallback frequency across an array of threshold values (0.30 to 0.80) to systematically determine the optimal operating point. |
+| **Exemplar Leakage** | A form of data leakage where test queries are identical or nearly identical to training examples, artificially inflating evaluation metrics. |
+| **Fallback Intent** | A safe default intent (`general`) assigned when no intent meets the minimum confidence threshold, preventing out-of-domain conversational queries from triggering specialized tools. |
+
+### Why we did it this way
+
+- **`BAAI/bge-small-en-v1.5` over MiniLM or frontier models** because it offers state-of-the-art embedding quality on retrieval and clustering benchmarks in a compact 133MB footprint, executing inference in ~40-60ms on CPU without consuming GPU VRAM.
+- **Top-3 similarity averaging instead of 1-NN** because 1-NN is fragile to incidental word overlap. Top-3 averaging requires consistent semantic affinity across multiple diverse exemplars.
+- **Precomputed embeddings at startup** so request classification only requires encoding a single query string and doing a fast matrix-vector dot product (`cosine_similarity`).
+- **Automated zero-leakage validator in evaluation** ensuring evaluation scores reflect true generalization to unseen phrasing rather than memorized sentences.
+- **System prompt injection for `structured_json`** directly steering the small language model (Phi-3) toward valid JSON generation without requiring expensive fine-tuning.
+
+### Mentor questions
+
+**Q1: Why use semantic embedding similarity instead of an LLM prompt or an SVM/logistic regression classifier for intent routing?**
+A: An LLM prompt adds 500-1000ms of autoregressive generation latency and consumes precious VRAM/GPU resources. A fine-tuned classifier requires retraining whenever new intents or examples are added. Embedding similarity with `bge-small` takes ~50ms on CPU, requires zero GPU memory, and allows updating the intent bank instantly by simply editing `intents.yaml` without retraining.
+
+**Q2: Why score intents using the mean of the top-3 similarities rather than just the top-1 (nearest neighbor)?**
+A: Top-1 similarity is vulnerable to accidental lexical or syntactic overlap between a query and an unusual exemplar. Averaging the top 3 similarities requires the query to be consistently close to multiple exemplars of that intent, reducing variance and misclassifications.
+
+**Q3: How was the decision threshold `0.55` determined, and what does the threshold sweep reveal?**
+A: The threshold sweep in `eval/results/router_report.md` tested values from 0.30 to 0.80. Below 0.50, accuracy was 92.2% but ambiguous queries were not rejected. At 0.55, accuracy peaked at 93.8% with 7 appropriate fallbacks to `general`. Above 0.70, accuracy plummeted to 64.1% and 26.6% as legitimate queries were rejected as false negatives.
+
+**Q4: How do we prevent evaluation data leakage between `router_eval.jsonl` and `intents.yaml`?**
+A: `eval/router_eval.py` executes an automated pre-flight integrity check (`verify_no_duplicate_eval_queries`) that normalizes (strips punctuation and whitespace, lowercases) all queries and asserts 0 duplicates between the 64 evaluation queries and 112 training exemplars before running evaluation.
+
+**Q5: What happens to the prompt when the router detects `structured_json`?**
+A: In `main.py`, the gateway inspects the sanitized messages. If a system prompt is already present, it appends `settings.STRUCTURED_JSON_SYSTEM_PROMPT`. If no system message exists, it inserts a new `{"role": "system", "content": ...}` message at the start of the message array, instructing Phi-3 to output raw, valid JSON only.
+
+### Verification command
+
+```bash
+# 1. Run all unit and integration tests (49 passing tests)
+uv run pytest gateway/tests/test_api.py gateway/tests/test_schemas.py gateway/tests/test_pii.py gateway/tests/test_router.py -v
+
+# 2. Run intent router evaluation and threshold sweep
+uv run python eval/router_eval.py
+
+# 3. Run PII redaction evaluation
+uv run python eval/pii_eval.py
+```
+

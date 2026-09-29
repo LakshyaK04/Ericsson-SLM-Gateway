@@ -1,0 +1,64 @@
+{"query": "What is the historical origin of the Olympic marathon distance?", "intent": "general"}
+{"query": "Can you explain how solar eclipses occur from an astronomical perspective?", "intent": "general"}
+{"query": "Who wrote the classic Russian novel War and Peace?", "intent": "general"}
+{"query": "Why do cats purr when they are relaxed or feeling stressed?", "intent": "general"}
+{"query": "Suggest three simple vegetarian dinner recipes for beginners.", "intent": "general"}
+{"query": "What are the primary differences between deductive and inductive reasoning?", "intent": "general"}
+{"query": "Who was Ada Lovelace and why is she celebrated as the earliest computer pioneer?", "intent": "general"}
+{"query": "Explain how microwave ovens heat food using electromagnetic waves.", "intent": "general"}
+{"query": "Why is the Sahara Desert so arid and hot during daytime?", "intent": "general"}
+{"query": "Can you compose a short inspirational fable about patience?", "intent": "general"}
+{"query": "What major technological changes characterized the Industrial Revolution in Britain?", "intent": "general"}
+{"query": "How many valves does a standard trumpet possess and how do they change pitch?", "intent": "general"}
+{"query": "Why do humans require approximately eight hours of restorative sleep each night?", "intent": "general"}
+{"query": "What is the capital city of Australia and when was it founded?", "intent": "general"}
+{"query": "Can you give me a list of creative metaphors describing a tempestuous thunderstorm?", "intent": "general"}
+{"query": "What causes the aurora borealis to glow in vibrant colors near polar regions?", "intent": "general"}
+{"query": "How does MongoDB index and query nested document structures inside collections?", "intent": "technical"}
+{"query": "Explain how the Raft consensus protocol handles network partitions between nodes.", "intent": "technical"}
+{"query": "What is the computational overhead difference between JSON and Protocol Buffers?", "intent": "technical"}
+{"query": "How does a browser render canvas elements when generating a PDF via Puppeteer?", "intent": "technical"}
+{"query": "How does a Content Security Policy (CSP) header mitigate cross-site scripting vulnerabilities?", "intent": "technical"}
+{"query": "Explain how zero-copy networking operations work with Linux sendfile system call.", "intent": "technical"}
+{"query": "What is the role of an LSM-tree (Log-Structured Merge-tree) in Cassandra storage engines?", "intent": "technical"}
+{"query": "How do you implement an LRU cache with O(1) operations using an OrderedDict in Python?", "intent": "technical"}
+{"query": "Explain the mechanics of memory barriers and instruction reordering in multithreaded CPU cores.", "intent": "technical"}
+{"query": "How does Kubernetes Ingress controller distribute incoming traffic using Envoy proxy?", "intent": "technical"}
+{"query": "Write an efficient SQL recursive common table expression (CTE) to traverse an organizational hierarchy.", "intent": "technical"}
+{"query": "What is the architectural difference between eBPF and traditional kernel modules in Linux?", "intent": "technical"}
+{"query": "How does OAuth 2.0 PKCE (Proof Key for Code Exchange) secure single-page applications?", "intent": "technical"}
+{"query": "Explain how the Actor model manages concurrency without shared mutable state in Akka.", "intent": "technical"}
+{"query": "What is the mathematical definition and purpose of backpropagation in deep neural networks?", "intent": "technical"}
+{"query": "How do you optimize garbage collection pauses in Golang for high-throughput microservices?", "intent": "technical"}
+{"query": "Return the list of active network interfaces strictly as a JSON array of objects.", "intent": "structured_json"}
+{"query": "Convert this table of country populations into a clean, valid JSON dictionary.", "intent": "structured_json"}
+{"query": "Extract the customer name, order ID, and total cost into a JSON payload.", "intent": "structured_json"}
+{"query": "Provide the TCP connection states as a valid JSON list of strings without commentary.", "intent": "structured_json"}
+{"query": "Format the current routing table entries into a JSON object with destination and gateway keys.", "intent": "structured_json"}
+{"query": "Serialize this employee attendance log into a valid JSON array format.", "intent": "structured_json"}
+{"query": "Output the database schema definition as a strict JSON document.", "intent": "structured_json"}
+{"query": "Extract author and publication year from this citation into a JSON dictionary with keys 'author' and 'year'.", "intent": "structured_json"}
+{"query": "Parse this HTTP response header string and return the key-value pairs formatted as JSON.", "intent": "structured_json"}
+{"query": "Generate a JSON object containing the computed summary statistics: min, max, mean, and median.", "intent": "structured_json"}
+{"query": "Format the user preference settings into a valid JSON structure without markdown fences.", "intent": "structured_json"}
+{"query": "I need you to parse my grocery list and output strictly valid JSON with item and quantity fields.", "intent": "structured_json"}
+{"query": "Transform this CSV formatted string of product skus into a JSON list of objects.", "intent": "structured_json"}
+{"query": "Output the server hardware monitoring metrics strictly as a JSON formatted payload.", "intent": "structured_json"}
+{"query": "Generate a valid JSON array of error objects containing error_code and error_message.", "intent": "structured_json"}
+{"query": "Format the geo-location coordinates and timestamp into a standardized JSON representation.", "intent": "structured_json"}
+{"query": "According to the uploaded system design document, which port does the Redis cluster listen on?", "intent": "rag"}
+{"query": "What does the attached API integration specification document say about JSON error payloads?", "intent": "rag"}
+{"query": "What is the travel expense reimbursement limit stated in the company policy document?", "intent": "rag"}
+{"query": "Based on the provided PDF report, what was the percentage increase in quarterly revenue?", "intent": "rag"}
+{"query": "According to the uploaded product manual, how often should the air intake filter be replaced?", "intent": "rag"}
+{"query": "Find the section in the attached contract discussing intellectual property ownership rights.", "intent": "rag"}
+{"query": "What does the safety inspection PDF state regarding mandatory fire extinguisher checks?", "intent": "rag"}
+{"query": "According to the uploaded whitepaper, what are the primary throughput bottlenecks in 5G RAN?", "intent": "rag"}
+{"query": "Summarize the key compliance audit findings documented in section 3 of the attached report.", "intent": "rag"}
+{"query": "What does the employee onboarding manual say about health insurance enrollment deadlines?", "intent": "rag"}
+{"query": "Based on the uploaded technical brief, what is the maximum recommended payload size?", "intent": "rag"}
+{"query": "What does the warranty document state regarding accidental damage coverage?", "intent": "rag"}
+{"query": "According to the attached release documentation, which deprecations were introduced in version 3.0?", "intent": "rag"}
+{"query": "What does the disaster recovery plan PDF specify as the target Recovery Point Objective (RPO)?", "intent": "rag"}
+{"query": "Search the uploaded meeting minutes document for the agreed deadline on the cloud migration.", "intent": "rag"}
+{"query": "According to the uploaded architecture guide, what is the maximum number of replicas allowed?", "intent": "rag"}
