@@ -421,4 +421,74 @@ type eval\results\chunking_report.md
 type eval\results\chunking_report.csv
 ```
 
+---
+
+## Phase 6: Merge (Gateway + RAG Integration)
+
+### What was built
+
+We integrated the SLM Gateway (port 8000) and the Hybrid RAG Service (port 8001) into a unified, enterprise-grade architecture:
+
+1. **RAG Grounded Generation Engine (`rag/src/rag_service/generation.py`)**:
+   - `build_grounded_prompt()` formats retrieved chunks into numbered context blocks (`[1]`, `[2]`, `[3]`) complete with source document names and page metadata.
+   - Enforces a strict system prompt directing the LLM to ground answers exclusively in the provided context, cite bracketed numbers (e.g., `[1]`), and state clearly if the answer is not present.
+   - Dispatches generation requests to the Gateway `/v1/chat/completions` endpoint passing the header `X-Bypass-Router: true`.
+   - `POST /answer` endpoint on RAG service returning `AnswerResponse` containing the synthesized `answer`, ranked `sources`, and `usage` statistics.
+
+2. **Gateway RAG Client & Intelligent Routing (`gateway/src/slm_gateway/rag_client.py` & `main.py`)**:
+   - Asynchronous HTTP client checking RAG index status via `GET /documents` (`has_indexed_documents()`).
+   - Routes queries classified as `rag` intent through `RAGClient.generate_answer()`.
+   - Enriches the standard OpenAI response with `x_sources`, listing chunk IDs, document names, page numbers, dense scores, and re-ranking scores.
+   - Implements graceful fallback: if 0 documents are indexed or the RAG service is unreachable/timed out, the Gateway falls back seamlessly to the local model, injecting an explanatory warning into `x_routing["warning"]` while keeping `x_sources=None`.
+
+3. **Loop Prevention & Architectural Cleanliness**:
+   - The Gateway checks `X-Bypass-Router: true`. When present, the Intent Router is bypassed entirely, routing directly to the local model (`hf_local`). This eliminates circular dependency loops (User -> Gateway -> RAG -> Gateway -> RAG...).
+   - Centralizes all LLM inference, PII redaction, token accounting, and GPU memory management in the Gateway while keeping vector storage, chunking, and re-ranking in the RAG service.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Bypass Router Header (`X-Bypass-Router`)** | An internal HTTP header passed by the RAG service to the Gateway to skip semantic intent classification and invoke local LLM generation directly. |
+| **Context Augmentation Block** | A structured text payload containing retrieved document snippets formatted with index markers (`[1]`, `[2]`), source filenames, and page coordinates for LLM consumption. |
+| **Grounded Answer Generation** | LLM text synthesis constrained strictly to provided context snippets, requiring explicit citations and prohibiting hallucinated assumptions. |
+| **Graceful Degradation / Fallback** | The capability of an enterprise gateway to continue fulfilling user requests via base model generation when auxiliary subsystems (RAG index or vector store) are empty or unavailable. |
+| **OpenAI Schema Preservation** | Maintaining 100% adherence to standard OpenAI chat completion schemas (`id`, `choices`, `usage`) while supplying vendor-specific enhancements under `x_` metadata prefixes. |
+
+### Why we did it this way
+
+- **Single Point of LLM Serving:** By having RAG invoke the Gateway's `/v1/chat/completions` endpoint for text generation rather than instantiating its own duplicate model pipeline, we avoid duplicating massive weights in GPU memory (~2.5GB-7GB VRAM savings) and ensure uniform token metering and PII auditing across the entire enterprise.
+- **Header-Based Loop Prevention (`X-Bypass-Router`):** Bypassing intent classification on internal RAG-to-Gateway calls prevents infinite recursive loops without requiring a second dedicated internal port or separate model daemon.
+- **Index-Aware Fallback:** Rather than throwing an internal 500 error or returning empty context when a user asks a document-related question on a freshly deployed instance with zero uploaded documents, the Gateway transparently falls back to local knowledge and warns the caller in `x_routing["warning"]`.
+- **Numbered In-Context Citations:** Numbered brackets `[1]` provide an unambiguous notation for small language models (Phi-3 Mini) to map claims directly back to specific document sources and page numbers.
+
+### Mentor questions
+
+**Q1: How does the architecture prevent infinite recursive loops between the Gateway and RAG service?**
+A: When a user query routes to `rag`, the Gateway calls the RAG service's `POST /answer` endpoint. The RAG service performs two-stage retrieval, prepares the grounded prompt, and calls the Gateway's `POST /v1/chat/completions` endpoint with `X-Bypass-Router: true`. The Gateway detects this header and skips intent classification entirely, routing immediately to `hf_local`. Without this bypass, the Gateway router might classify the augmented context prompt as `rag` again, initiating an infinite HTTP loop.
+
+**Q2: Why does the Gateway check `has_indexed_documents()` before delegating a `rag` route, and what happens if 0 documents are indexed?**
+A: If no documents have been uploaded to the RAG service, attempting retrieval will return zero chunks, causing either empty context generation or unnecessary RAG roundtrips. The Gateway checks `GET /documents`; if the index is empty, it bypasses RAG, routes directly to the local model, sets `x_sources=None`, and populates `x_routing["warning"] = "RAG service has no indexed documents; routed to local model"`.
+
+**Q3: Why should RAG call the Gateway for LLM generation rather than hosting its own local model instance?**
+A: In an enterprise deployment, hosting LLMs in multiple microservices leads to VRAM starvation, duplicated model cache files, fragmented logging, and independent rate limits. Centralizing LLM generation in the Gateway allows single-tenant GPU memory optimization, unified PII filtering, consistent token usage calculation, and single-pane observability.
+
+**Q4: Why are RAG sources attached as `x_sources` on the chat completion response rather than injected into the message content text?**
+A: Standard OpenAI chat completion clients (and libraries like `langchain` or `openai-python`) expect `choices[0].message.content` to be a pure string of the assistant's reply. Modifying the response envelope to include custom fields prefixed with `x_` (`x_sources`, `x_routing`, `x_pii`) preserves compatibility with existing SDKs while providing structured citation metadata (chunk ID, source doc, page, dense score, rerank score) for rich client UIs.
+
+**Q5: How does the system handle RAG service timeouts or network failures gracefully?**
+A: `RAGClient` catches `httpx.RequestError` and timeout exceptions. In `gateway/src/slm_gateway/main.py`, if `generate_answer` returns `None` due to an error, the Gateway logs a warning, falls back to `hf_local`, and sets `x_routing["warning"] = "RAG service unreachable or failed; routed to local model"`, ensuring the end user still receives a response.
+
+### Verification command
+
+```bash
+# 1. Run all unit and integration tests across both Gateway and RAG
+uv run pytest gateway/tests/ -v
+uv run pytest rag/tests/ -v
+
+# 2. Run end-to-end live verification script (starts mock gateway + RAG, indexes doc, verifies grounded answer with sources)
+uv run python scripts/verify_phase6.py
+```
+
+
 

@@ -17,7 +17,9 @@ from .embeddings import EmbeddingModel, get_embedding_model
 from .parsers import parse_document
 from .reranker import Reranker, get_reranker
 from .retriever import Retriever, get_retriever
+from .generation import generate_grounded_answer
 from .schemas import (
+    AnswerResponse,
     DeleteDocumentResponse,
     DocumentInfo,
     DocumentListResponse,
@@ -267,3 +269,26 @@ async def query_documents(request: QueryRequest):
         results=results,
         total_retrieved=len(results),
     )
+
+
+@app.post("/answer", response_model=AnswerResponse)
+async def answer_question(request: QueryRequest):
+    """Retrieve relevant document chunks and generate a grounded answer via Gateway."""
+    rag_retriever = retriever or get_retriever(cfg=settings)
+
+    results = rag_retriever.retrieve(
+        query=request.query,
+        strategy=request.strategy,
+        retrieve_k=request.retrieve_k,
+        final_k=request.final_k,
+        doc_ids=request.doc_ids,
+        use_reranker=request.use_reranker,
+    )
+
+    answer_resp = await generate_grounded_answer(
+        query=request.query,
+        chunks=results,
+        config=settings,
+    )
+    return answer_resp
+

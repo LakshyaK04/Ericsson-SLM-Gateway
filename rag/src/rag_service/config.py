@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     # Gateway connection for Phase 6
     GATEWAY_URL: str = "http://localhost:8000"
+    GATEWAY_MODEL: str = "microsoft/Phi-3-mini-4k-instruct"
+    GATEWAY_TIMEOUT: float = 30.0
 
 
 settings = Settings()

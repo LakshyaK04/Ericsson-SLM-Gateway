@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
     PROJECT_CODENAMES: str = "Project-Titan,Project-Apollo,Project-Odin,Project-Thor,Project-Aegis"
     RAG_SERVICE_URL: str = "http://localhost:8001"
+    RAG_TIMEOUT_SECONDS: float = 30.0
+    RAG_DEFAULT_STRATEGY: str = "structure"
 
     @property
     def project_codenames_list(self) -> list[str]:

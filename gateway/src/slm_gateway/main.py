@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from .backends import LLMBackend, get_backend
 from .config import settings
 from .pii import PIIRedactionError, PIIRedactor, get_redactor
+from .rag_client import RAGClient
 from .router import IntentRouter, RoutingResult, get_router
 from .schemas import (
     ChatCompletionRequest,
@@ -35,33 +36,40 @@ logger = logging.getLogger(__name__)
 backend: Optional[LLMBackend] = None
 pii_redactor: Optional[PIIRedactor] = None
 router_instance: Optional[IntentRouter] = None
+rag_client_instance: Optional[RAGClient] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model backend, PII redactor, and intent router once at startup per rule 5."""
-    global backend, pii_redactor, router_instance
-    logger.info("Initializing SLM Gateway PII redactor...")
-    try:
-        pii_redactor = get_redactor(settings)
-    except Exception as e:
-        logger.error("Failed to load PII redactor: %s", str(e), exc_info=True)
+    global backend, pii_redactor, router_instance, rag_client_instance
+    if pii_redactor is None:
+        logger.info("Initializing SLM Gateway PII redactor...")
+        try:
+            pii_redactor = get_redactor(settings)
+        except Exception as e:
+            logger.error("Failed to load PII redactor: %s", str(e), exc_info=True)
     app.state.pii_redactor = pii_redactor
 
-    logger.info("Initializing SLM Gateway Intent router...")
-    try:
-        router_instance = get_router(settings)
-    except Exception as e:
-        logger.error("Failed to load Intent router: %s", str(e), exc_info=True)
+    if router_instance is None:
+        logger.info("Initializing SLM Gateway Intent router...")
+        try:
+            router_instance = get_router(settings)
+        except Exception as e:
+            logger.error("Failed to load Intent router: %s", str(e), exc_info=True)
     app.state.router = router_instance
 
-    logger.info("Initializing SLM Gateway backend: %s...", settings.BACKEND)
-    backend = get_backend(settings)
-    try:
-        await backend.load()
-    except Exception as e:
-        logger.error("Failed to load backend during startup: %s", str(e), exc_info=True)
-        # Service can still boot so /health works, but /ready will fail
+    if rag_client_instance is None:
+        rag_client_instance = RAGClient(settings)
+    app.state.rag_client = rag_client_instance
+
+    if backend is None:
+        logger.info("Initializing SLM Gateway backend: %s...", settings.BACKEND)
+        backend = get_backend(settings)
+        try:
+            await backend.load()
+        except Exception as e:
+            logger.error("Failed to load backend during startup: %s", str(e), exc_info=True)
     app.state.backend = backend
     yield
     logger.info("Shutting down SLM Gateway...")
@@ -297,9 +305,44 @@ async def chat_completions(
                 )
 
         elif route_result.intent == "rag":
-            # Phase 3 fallback notice prior to Phase 6 RAG integration
-            x_routing["warning"] = "RAG service offline; fell back to local model."
-            x_routing["route"] = "hf_local"
+            rag_cli = rag_client_instance or RAGClient(settings)
+            has_docs, check_err = await rag_cli.has_indexed_documents()
+            if not has_docs:
+                if check_err == "no_documents_indexed":
+                    x_routing["warning"] = "No documents indexed in RAG service; fell back to local model."
+                else:
+                    x_routing["warning"] = f"RAG service unavailable ({check_err}); fell back to local model."
+                x_routing["route"] = "hf_local"
+            else:
+                rag_resp, rag_err = await rag_cli.get_answer(query=query_to_route)
+                if rag_err or not rag_resp:
+                    x_routing["warning"] = f"RAG answer generation failed ({rag_err}); fell back to local model."
+                    x_routing["route"] = "hf_local"
+                else:
+                    x_routing["route"] = "rag_service"
+                    rag_content = rag_resp.get("answer", "")
+                    rag_sources = rag_resp.get("sources", [])
+                    raw_usage = rag_resp.get("usage", {})
+
+                    model_name = request.model or "rag-hybrid"
+                    return ChatCompletionResponse(
+                        model=model_name,
+                        choices=[
+                            Choice(
+                                index=0,
+                                message=ChoiceMessage(role="assistant", content=rag_content),
+                                finish_reason="stop",
+                            )
+                        ],
+                        usage=Usage(
+                            prompt_tokens=raw_usage.get("prompt_tokens", 0),
+                            completion_tokens=raw_usage.get("completion_tokens", 0),
+                            total_tokens=raw_usage.get("total_tokens", 0),
+                        ),
+                        x_routing=x_routing,
+                        x_pii={"redactions": total_redactions},
+                        x_sources=rag_sources,
+                    )
 
     try:
         content, prompt_tokens, completion_tokens, finish_reason = await backend.generate(

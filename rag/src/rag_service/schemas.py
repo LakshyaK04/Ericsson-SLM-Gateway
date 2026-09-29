@@ -62,3 +62,29 @@ class QueryResponse(BaseModel):
     strategy: str
     results: List[QueryResultItem]
     total_retrieved: int
+
+
+class SourceItem(BaseModel):
+    """Source reference information included with answers."""
+    chunk_id: str
+    source: str
+    page: int
+    strategy: str
+    dense_score: float
+    rerank_score: float
+    text: str
+
+
+class UsageInfo(BaseModel):
+    """Token usage report from generation."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class AnswerResponse(BaseModel):
+    """Response body returned by POST /answer."""
+    answer: str
+    sources: List[SourceItem]
+    usage: UsageInfo
+
