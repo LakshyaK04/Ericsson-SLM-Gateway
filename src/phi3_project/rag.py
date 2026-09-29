@@ -10,13 +10,20 @@ from src.phi3_project.vector_store import VectorStore
 
 
 class RAGPipeline:
-    def __init__(self, pdf_path: str):
+    def __init__(
+        self,
+        pdf_path: str,
+        chunking_strategy: str = "character",
+    ):
         # 1. Load PDF
         text = extract_text_from_pdf(pdf_path)
         text = clean_text(text)
 
         # 2. Create chunks
-        self.chunks = chunk_text(text)
+        self.chunks = chunk_text(
+            text,
+            chunking_strategy,
+        )
 
         # 3. Create embeddings
         self.embedding_model = EmbeddingModel()

@@ -28,6 +28,44 @@ async def health():
         "service": "slm-gateway",
     }
 
+@app.post("/v1/rag/query")
+async def rag_query(request: dict):
+    query = request.get("query", "")
+    strategy = request.get(
+        "chunking_strategy",
+        "character",
+    )
+
+    if not query:
+        raise HTTPException(
+            status_code=400,
+            detail="Query is required",
+        )
+
+    if strategy not in {
+        "character",
+        "structure",
+        "semantic",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid chunking strategy",
+        )
+
+    rag = RAGPipeline(
+        "data/ericsson_rag_sample.pdf",
+        strategy,
+    )
+
+    result = await rag.generate(query)
+
+    return {
+        "query": query,
+        "chunking_strategy": strategy,
+        "answer": result["answer"],
+        "sources": result["sources"],
+    }
+
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: dict):

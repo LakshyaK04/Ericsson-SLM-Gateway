@@ -47,10 +47,11 @@ def structure_chunking(text: str):
 def semantic_chunking(
     text: str,
     threshold: float = 0.65,
+    min_chunk_size: int = 300,
 ):
     """
-    Split text when the semantic similarity between
-    adjacent sentences drops below the threshold.
+    Split text at semantic boundaries while keeping
+    chunks large enough to preserve context.
     """
     sentences = [
         sentence.strip()
@@ -80,8 +81,16 @@ def semantic_chunking(
             [embeddings[i]],
         )[0][0]
 
-        if similarity < threshold:
-            chunks.append(" ".join(current_chunk))
+        current_text = " ".join(current_chunk)
+
+        # Only split if:
+        # 1. There is a semantic boundary
+        # 2. Current chunk is already large enough
+        if (
+            similarity < threshold
+            and len(current_text) >= min_chunk_size
+        ):
+            chunks.append(current_text)
             current_chunk = [sentences[i]]
         else:
             current_chunk.append(sentences[i])
