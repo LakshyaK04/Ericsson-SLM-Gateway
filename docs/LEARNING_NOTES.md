@@ -565,6 +565,78 @@ uv run python scripts/demo.py --benchmark-only
 type docs\DEMO_SCRIPT.md
 ```
 
+---
+
+## Phase 8: Final QA & Verification
+
+### What was built
+
+We conducted a comprehensive final verification, dry-run clone audit, and produced the production limitations catalog:
+
+1. **Clean-Clone Audit**:
+   - Cloned the repository to a clean directory and verified structure, package specifications, environment templates, and documentation.
+   - Confirmed that `.env.example` provides explicit defaults for all Gateway and RAG configurations across local and Docker execution modes.
+
+2. **Complete Test Suite Execution (100% Pass Rate)**:
+   - Fast unit and integration tests (`pytest -m "not slow"`): **80 passed** in 66.06s.
+   - In-process quantized model test (`test_phi3_slow.py`): **1 passed** in 17.71s.
+   - Total test verification: **81 passed out of 81 tests**.
+
+3. **Known Limitations & Production Considerations (`docs/KNOWN_LIMITATIONS.md`)**:
+   - Documented operational boundaries across document ingestion (lack of OCR for scanned images, tabular layouts), concurrency (single-GPU semaphore serialisation, absence of SSE streaming), privacy (English-only spaCy models, static codename deny-lists), and environment constraints (Windows file locking on Chroma segments, host NVIDIA container requirements).
+
+4. **Definition of Done Verification**:
+   - All 11 checklist requirements in `AGENT_BUILD_PLAN.md` Section 9 verified and satisfied.
+
+### Glossary
+
+| Term | Meaning |
+|------|---------|
+| **Clean-Clone Validation** | Testing repository onboarding from a fresh clone to ensure no implicit local state, uncommitted files, or missing paths prevent execution. |
+| **Single-GPU Serialisation** | Guarding deep learning model inference behind an `asyncio.Semaphore(1)` to prevent concurrent CUDA memory allocation faults on a single GPU. |
+| **PagedAttention / Continuous Batching** | Advanced inference engine techniques (used by vLLM/TGI) to dynamically batch tokens across multiple concurrent requests without thread-blocking. |
+| **Layout-Aware OCR** | Optical character recognition engines that identify columns, tables, and bounding boxes in scanned images before passing text to downstream parsers. |
+| **Definition of Done (DoD)** | A formal agreement specifying all quality, testing, architectural, and documentation criteria a software deliverable must meet before release. |
+
+### Why we did it this way
+
+- **Honest Limitations over Vague Promises:** Real enterprise systems have operational boundaries. Documenting that scanned PDFs require OCR and that in-process Phi-3 serializes requests demonstrates technical maturity and equips mentors with genuine engineering insights.
+- **Fast vs. Slow Test Partitioning:** Running 80 tests in ~1 minute enables fast local TDD and CI pull-request checks without downloading 2.6GB of weights, while preserving full end-to-end integration tests in `@pytest.mark.slow`.
+- **Decoupled Architecture with HTTP Contracts:** The Gateway and RAG services communicate strictly over HTTP using standard REST interfaces. If the local Phi-3 backend becomes a bottleneck under high user volume, operators can transition to `BACKEND=openai_compatible` without modifying a single line of RAG code.
+
+### Mentor questions
+
+**Q1: What happens if an enterprise user uploads an image-only scanned PDF to the RAG service?**
+A: The RAG service's PDF parser (`pymupdf`) extracts zero text characters across all pages. The service intercepts this condition immediately and returns HTTP 400 Bad Request with: `"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.
+
+**Q2: How does the Gateway prevent CUDA out-of-memory errors when multiple users send simultaneous requests to `hf_local`?**
+A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)`. This ensures that even under concurrent inbound HTTP traffic, only one generation job executes on the GPU at any given instant; subsequent requests queue safely in the asyncio event loop.
+
+**Q3: What is the primary bottleneck when scaling this architecture to hundreds of concurrent users, and how would you resolve it?**
+A: In-process single-GPU serialisation is the primary throughput bottleneck. To scale to high concurrency:
+1. Switch `BACKEND=openai_compatible` and point the Gateway to a dedicated cluster running vLLM or HuggingFace TGI, which uses PagedAttention and continuous batching across multiple GPUs.
+2. Deploy multiple Gateway container replicas behind an enterprise load balancer (e.g., NGINX, Envoy).
+
+**Q4: Why did we separate the test suite into fast mocked tests and slow model tests?**
+A: Loading Phi-3 Mini and BGE models takes 15-20 seconds and consumes 3GB+ of memory. Marking real model inference with `@pytest.mark.slow` allows developers and CI systems to run 80 unit and integration tests (testing schemas, routing logic, PII redaction, chunking boundaries, and error codes) in 60 seconds with lightweight mocks, while still verifying real PyTorch execution in dedicated runs.
+
+**Q5: Looking back at the entire build from Phase 0 to Phase 8, what was the most important architectural design decision?**
+A: The loop prevention design using `X-Bypass-Router: true` coupled with centralized model serving. It allowed the RAG service to remain completely decoupled from LLM weight management (saving ~2.6GB of duplicate VRAM), maintained a single point of PII enforcement and token metering at the Gateway, and solved the circular delegation problem elegantly without requiring dual ports or complex orchestration.
+
+### Verification command
+
+```bash
+# 1. Run all 80 fast unit and integration tests
+uv run pytest gateway/tests/ rag/tests/ -v -m "not slow"
+
+# 2. Run the slow in-process model inference test
+uv run pytest gateway/tests/test_phi3_slow.py -v
+
+# 3. View the complete known limitations report
+type docs\KNOWN_LIMITATIONS.md
+```
+
+
 
 
 
