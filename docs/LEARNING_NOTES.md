@@ -89,14 +89,14 @@ We wired these into `main.py` with FastAPI lifespan model loading, `/health` and
 **Q1: Why do we need `asyncio.to_thread` and an `asyncio.Semaphore(1)` around generation?**
 A: PyTorch's `model.generate()` is a blocking synchronous call. Without `asyncio.to_thread`, running it would block the Python event loop, causing all concurrent requests (including `/health` and `/ready` probes) to freeze. The semaphore of size 1 ensures that multiple requests don't attempt simultaneous generation on a single GPU, avoiding CUDA Out-of-Memory crashes.
 
-**Q2: How does authentication work, and why is it optional?**
-A: In `security.py`, `verify_api_key` inspects `GATEWAY_API_KEY`. If unset, the gateway acts as an open local proxy for easy development. If configured, every request to protected routes must include `Authorization: Bearer <key>`, or it receives a 401 `authentication_error`.
+**Q2: How is the gateway accessed by client applications?**
+A: The gateway exposes an open local endpoint on port 8000 mimicking OpenAI's standard `/v1/chat/completions`. Client applications can connect directly without needing complex cloud authentication headers.
 
 **Q3: How does prompt context truncation work in `HFLocalBackend`?**
 A: Phi-3-mini has a 4096 token context window. If the prompt tokens plus `max_tokens` exceeds 4096, `HFLocalBackend` preserves the system prompt at index 0 and progressively trims the oldest conversational turns, logging a warning, instead of failing silently or crashing.
 
 **Q4: How can third-party tools use this gateway?**
-A: Any application or SDK designed for OpenAI can interact with this service simply by configuring `base_url="http://localhost:8000/v1"` and setting any arbitrary API key if `GATEWAY_API_KEY` is disabled.
+A: Any application or SDK designed for OpenAI can interact with this service simply by configuring `base_url="http://localhost:8000/v1"` and setting any arbitrary API key (e.g., `api_key="not-needed"`).
 
 **Q5: How do we verify Phase 1 without waiting for heavy model loads during CI?**
 A: Unit and API tests mock the backend, executing 16 tests in less than a second. A dedicated `@pytest.mark.slow` test (`test_phi3_slow.py`) tests the real in-process model inference on the GPU when desired.
@@ -123,8 +123,7 @@ We restricted the detected entity list to sensitive identifiers: `PERSON`, `EMAI
 
 We extended Presidio with custom recognizers:
 1. `EMPLOYEE_ID`: Regex pattern recognizer targeting organizational IDs matching `\bEMP-\d{5,7}\b`.
-2. `PROJECT_CODENAME`: Deny-list recognizer targeting internal confidential project codenames configured via `PII_PROJECT_CODENAMES`.
-3. `PHONE_NUMBER`: Supplementary regex recognizer capturing international and synthetic telephone patterns alongside Presidio's standard NANP validator.
+2. `PHONE_NUMBER`: Supplementary regex recognizer capturing international and synthetic telephone patterns alongside Presidio's standard NANP validator.
 
 We added support for typed placeholders (`<EMAIL_ADDRESS>`, `<EMPLOYEE_ID>`, etc.) and configurable failure policies (`PII_FAIL_MODE=closed|open`). Under the default fail-closed policy, if PII detection fails during startup or request processing, an error is raised (returning HTTP 500) rather than leaking raw private data.
 
@@ -162,7 +161,7 @@ A: In fail-closed mode (`PII_FAIL_MODE=closed`, default), any unhandled exceptio
 A: Typed placeholders preserve the grammatical role and category of the redacted entity. The LLM can still infer that the user provided an email address or employee identifier and respond appropriately (e.g. "I have noted your employee ID"), without ever seeing the actual private identifier.
 
 **Q4: How do custom recognizers fit into Presidio's architecture?**
-A: Presidio's `PatternRecognizer` allows custom regexes or keyword deny-lists to be registered with the `AnalyzerEngine`. We registered `EMPLOYEE_ID` (`\bEMP-\d{5,7}\b`) and `PROJECT_CODENAME` alongside standard recognizers. Presidio executes all recognizers concurrently, resolves token overlaps using confidence scores, and outputs a unified list of detected entity spans.
+A: Presidio's `PatternRecognizer` allows custom regexes or pattern rules to be registered with the `AnalyzerEngine`. We registered `EMPLOYEE_ID` (`\bEMP-\d{5,7}\b`) alongside standard recognizers. Presidio executes all recognizers, resolves token overlaps using confidence scores, and outputs a unified list of detected entity spans.
 
 **Q5: Why does `test_end_to_end_gateway_pii_redaction` inspect the mock backend payload rather than just checking the API response?**
 A: Checking only the client-facing HTTP response does not guarantee that the backend didn't see the raw PII (for example, if redaction were mistakenly applied only to the output). Asserting on `mock_backend.generate.call_args` provides cryptographic proof that the payload transmitted to the model backend contained solely the sanitized `<EMAIL_ADDRESS>` string.
@@ -181,11 +180,10 @@ uv run pytest gateway/tests/test_pii.py -v
 
 We implemented the semantic intent routing subsystem in `gateway/src/slm_gateway/router.py`, driven by `BAAI/bge-small-en-v1.5` dense sentence embeddings via `sentence-transformers`, with an exemplar bank defined in `gateway/src/slm_gateway/intents.yaml`.
 
-We established 4 intent classes with 28 diverse exemplars each (112 exemplars total):
+We established 3 intent classes with 28 diverse exemplars each (84 exemplars total):
 1. `general`: World knowledge, history, philosophy, trivia, conversational chit-chat, and creative inquiries.
 2. `technical`: Software engineering, networking protocols, databases, architectures, cloud infrastructure, and algorithms.
-3. `structured_json`: Demands for strict JSON schema output, serialized payloads, and key-value structured data.
-4. `rag`: Grounded questions targeting uploaded documents, PDFs, employee handbooks, specifications, and internal policies.
+3. `rag`: Grounded questions targeting uploaded documents, PDFs, employee handbooks, specifications, and internal policies.
 
 We implemented a mean top-3 cosine similarity aggregation algorithm: for each intent, similarity scores against all its exemplars are sorted descending and the average of the top 3 is computed. If the top scoring intent is below `ROUTER_THRESHOLD` (default 0.55), the router falls back to `general` with `fallback_applied=True`.
 
@@ -193,19 +191,14 @@ We integrated the router into `gateway/src/slm_gateway/main.py`:
 - Loaded `IntentRouter` once in the FastAPI lifespan handler, precomputing and normalizing all exemplar embeddings on startup.
 - Handled the `X-Bypass-Router: true` header to skip embedding computation and routing latency when downstream services or direct calls bypass routing.
 - Automatically applied route effects:
-  - When `structured_json` is classified, the gateway automatically injects or appends `settings.STRUCTURED_JSON_SYSTEM_PROMPT` into the messages, forcing valid raw JSON generation without conversational preamble.
-  - When `rag` is classified, the gateway prepares routing to the RAG service, with graceful fallback to `hf_local` if the RAG service is unreachable.
+  - When `rag` is classified, the gateway prepares routing to the RAG service, with graceful fallback to `hf_local` if the RAG service is unreachable or unindexed.
 - Appended `x_routing{intent, confidence, route, latency_ms}` metadata to every `ChatCompletionResponse`.
 - Updated `/ready` probe to require both the model backend and the intent router before returning HTTP 200.
 
-We built two comprehensive evaluation pipelines:
-1. `eval/router_eval.py` & `eval/datasets/router_eval.jsonl`:
-   - 64 labeled queries (16 per intent) designed with tricky ambiguous edge cases (technical queries mentioning documents, JSON queries about networking, biographical queries with numbers).
-   - Automated duplicate leakage validator asserting 0 overlap between eval queries and training exemplars.
-   - Evaluated overall accuracy (93.75%), per-intent precision/recall/F1, a 4x4 confusion matrix, and a threshold sweep from 0.30 to 0.80 confirming 0.55 is the optimal operating threshold. Saved to `eval/results/router_report.md`.
-2. `eval/pii_eval.py` & `eval/datasets/pii_eval.jsonl`:
-   - 45 test queries evaluating entity recall across 7 entity categories (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`, `EMPLOYEE_ID`, `PROJECT_CODENAME`) and false positive rate on clean text.
-   - Demonstrated 100.0% PII recall (35/35) and 0.00% False Positive Rate (0/10). Saved to `eval/results/pii_report.md`.
+We built an evaluation pipeline in `eval/router_eval.py` & `eval/datasets/router_eval.jsonl`:
+- 48 labeled queries (16 per intent) designed with tricky ambiguous edge cases.
+- Automated duplicate leakage validator asserting 0 overlap between eval queries and training exemplars.
+- Evaluated overall accuracy (93.75%), per-intent precision/recall/F1, and a threshold sweep from 0.30 to 0.80 confirming 0.55 is the optimal operating threshold. Saved to `eval/results/router_report.md`.
 
 ### Glossary
 
@@ -237,10 +230,7 @@ A: Top-1 similarity is vulnerable to accidental lexical or syntactic overlap bet
 A: The threshold sweep in `eval/results/router_report.md` tested values from 0.30 to 0.80. Below 0.50, accuracy was 92.2% but ambiguous queries were not rejected. At 0.55, accuracy peaked at 93.8% with 7 appropriate fallbacks to `general`. Above 0.70, accuracy plummeted to 64.1% and 26.6% as legitimate queries were rejected as false negatives.
 
 **Q4: How do we prevent evaluation data leakage between `router_eval.jsonl` and `intents.yaml`?**
-A: `eval/router_eval.py` executes an automated pre-flight integrity check (`verify_no_duplicate_eval_queries`) that normalizes (strips punctuation and whitespace, lowercases) all queries and asserts 0 duplicates between the 64 evaluation queries and 112 training exemplars before running evaluation.
-
-**Q5: What happens to the prompt when the router detects `structured_json`?**
-A: In `main.py`, the gateway inspects the sanitized messages. If a system prompt is already present, it appends `settings.STRUCTURED_JSON_SYSTEM_PROMPT`. If no system message exists, it inserts a new `{"role": "system", "content": ...}` message at the start of the message array, instructing Phi-3 to output raw, valid JSON only.
+A: `eval/router_eval.py` executes an automated pre-flight integrity check (`verify_no_duplicate_eval_queries`) that normalizes (strips punctuation and whitespace, lowercases) all queries and asserts 0 duplicates between the 48 evaluation queries and 84 training exemplars before running evaluation.
 
 ### Verification command
 

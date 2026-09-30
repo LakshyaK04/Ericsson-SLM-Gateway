@@ -46,7 +46,7 @@ class MockRouter:
             confidence=0.95,
             route="hf_local",
             latency_ms=1.2,
-            scores_by_intent={"general": 0.95, "technical": 0.4, "structured_json": 0.3, "rag": 0.2},
+            scores_by_intent={"general": 0.95, "technical": 0.4, "rag": 0.2},
             fallback_applied=False,
         )
 

@@ -1,7 +1,7 @@
 """PII redaction engine using Presidio and spaCy en_core_web_sm.
 
-Restricts entity detection to sensitive types, adds custom recognizers for
-EMPLOYEE_ID and PROJECT_CODENAME, avoids false positives on locations/dates,
+Restricts entity detection to sensitive types, adds custom recognizer for
+EMPLOYEE_ID, avoids false positives on locations/dates,
 and provides configurable fail-closed / fail-open behavior.
 """
 

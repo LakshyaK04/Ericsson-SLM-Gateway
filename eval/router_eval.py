@@ -9,7 +9,11 @@ eval/results/router_report.md.
 from collections import defaultdict
 import json
 import logging
+import os
 from pathlib import Path
+
+# Prefer local Hugging Face cache to avoid DNS timeouts in offline / air-gapped environments
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 import re
 import sys
 import time
@@ -318,7 +322,7 @@ def generate_markdown_report(
         "",
         "### Threshold Selection Rationale",
         f"- **Selected Operating Threshold:** `{default_threshold}`",
-        f"- At `0.55`, the model maintains high discriminatory confidence across all distinct intents (`{base_metrics['accuracy'] * 100:.1f}%` accuracy) while preventing out-of-domain conversational noise from misrouting into specialized routes like `rag` or `structured_json`.",
+        f"- At `0.55`, the model maintains high discriminatory confidence across all distinct intents (`{base_metrics['accuracy'] * 100:.1f}%` accuracy) while preventing out-of-domain conversational noise from misrouting into specialized routes like `rag`.",
         f"- Thresholds above `0.70` become overly conservative, causing legitimate borderline queries to collapse into `general` fallback.",
         f"- Thresholds below `0.45` risk routing ambiguous queries into specialized handlers without sufficient semantic alignment.",
         "",
@@ -332,15 +336,11 @@ def generate_markdown_report(
         "   - Query: *'How does MongoDB index and query nested document structures inside collections?'*",
         "   - Correctly classified as: `technical` (high similarity to database/storage exemplars rather than PDF QA).",
         "",
-        "2. **Technical query requesting JSON output:**",
-        "   - Query: *'Provide the TCP connection states as a valid JSON list of strings without commentary.'*",
-        "   - Correctly classified as: `structured_json` (structural constraint overrides domain context).",
-        "",
-        "3. **RAG query referencing technical components:**",
+        "2. **RAG query referencing technical components:**",
         "   - Query: *'According to the uploaded system design document, which port does the Redis cluster listen on?'*",
         "   - Correctly classified as: `rag` (explicit document grounding correctly routes to retrieval pipeline).",
         "",
-        "4. **General knowledge query with numbers and coding history:**",
+        "3. **General knowledge query with numbers and coding history:**",
         "   - Query: *'Who was Ada Lovelace and why is she celebrated as the earliest computer pioneer?'*",
         "   - Correctly classified as: `general` (biographical historical query, avoiding false technical classification).",
     ])
