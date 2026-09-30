@@ -309,7 +309,7 @@ async def chat_completions(
                     rag_sources = rag_resp.get("sources", [])
                     raw_usage = rag_resp.get("usage", {})
 
-                    model_name = request.model or "rag-hybrid"
+                    model_name = request.model or "rag-pipeline"
                     return ChatCompletionResponse(
                         model=model_name,
                         choices=[

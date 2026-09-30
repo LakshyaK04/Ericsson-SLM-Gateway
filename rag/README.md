@@ -1,6 +1,6 @@
-# Hybrid RAG Service
+# RAG Service: Ingestion, Retrieval & Re-Ranking
 
-The **Hybrid RAG Service** is a decoupled microservice providing document ingestion, multi-strategy text chunking, dense vector retrieval, cross-encoder neural re-ranking, and grounded generation for technical enterprise documentation.
+The **RAG Service** is a decoupled microservice providing document ingestion, multi-strategy text chunking, dense vector retrieval, cross-encoder neural re-ranking, and grounded generation for technical documentation.
 
 ---
 

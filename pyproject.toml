@@ -5,7 +5,7 @@
 [project]
 name = "ericsson-genai-stack"
 version = "0.1.0"
-description = "Local GenAI Stack — SLM Gateway + Hybrid RAG Sandbox"
+description = "Local GenAI Stack — SLM Gateway + RAG Pipeline"
 readme = "README.md"
 authors = [
     { name = "Lakshya Kapoor", email = "kapoorlakshya42@gmail.com" }

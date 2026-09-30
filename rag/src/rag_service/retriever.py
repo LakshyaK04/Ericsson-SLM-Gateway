@@ -1,4 +1,4 @@
-"""Two-stage hybrid retriever: dense vector search followed by neural cross-encoder re-ranking.
+"""Two-stage retriever: dense vector search followed by neural cross-encoder re-ranking.
 
 Per Section 5.5:
 1. Dense Retrieval: Retrieve top retrieve_k (default 20) chunks from ChromaDB using BGE embeddings.
