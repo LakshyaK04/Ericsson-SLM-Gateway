@@ -1,17 +1,17 @@
 # Intent Router Evaluation Report
 
-**Date:** 2026-09-30 02:58:04
+**Date:** 2026-09-30 10:41:10
 **Model:** `BAAI/bge-small-en-v1.5` (sentence-transformers)
 **Scoring Strategy:** Mean of top-3 cosine similarities per intent
 **Configured Threshold:** `0.55` (Fallback intent: `general`)
-**Evaluation Dataset:** `router_eval.jsonl` (64 queries, zero exemplar leakage)
+**Evaluation Dataset:** `router_eval.jsonl` (48 queries, zero exemplar leakage)
 
 ---
 
 ## 1. Executive Summary
 
-- **Overall Accuracy:** `93.75%` (60 / 64 correct)
-- **Mean Classification Latency:** `66.83 ms` (P50: `60.84 ms`, P95: `79.38 ms`)
+- **Overall Accuracy:** `93.75%` (45 / 48 correct)
+- **Mean Classification Latency:** `11.57 ms` (P50: `9.20 ms`, P95: `29.03 ms`)
 - **Exemplar Leakage:** `0 duplicates` verified between evaluation set and training exemplars.
 
 ---
@@ -22,8 +22,7 @@
 | :--- | :---: | :---: | :---: | :---: |
 | **`general`** | 16 | 100.0% | 93.8% | 96.8% |
 | **`technical`** | 16 | 88.2% | 93.8% | 90.9% |
-| **`structured_json`** | 16 | 88.9% | 100.0% | 94.1% |
-| **`rag`** | 16 | 100.0% | 87.5% | 93.3% |
+| **`rag`** | 16 | 93.8% | 93.8% | 93.8% |
 
 ---
 
@@ -31,12 +30,11 @@
 
 Rows represent ground-truth labels; columns represent router predictions at threshold `0.55`.
 
-| Ground Truth \ Predicted | `general` | `technical` | `structured_json` | `rag` |
-| :--- | :---: | :---: | :---: | :---: |
-| **`general`** | **15** | 1 | 0 | 0 |
-| **`technical`** | 0 | **15** | 1 | 0 |
-| **`structured_json`** | 0 | 0 | **16** | 0 |
-| **`rag`** | 0 | 1 | 1 | **14** |
+| Ground Truth \ Predicted | `general` | `technical` | `rag` |
+| :--- | :---: | :---: | :---: |
+| **`general`** | **15** | 1 | 0 |
+| **`technical`** | 0 | **15** | 1 |
+| **`rag`** | 0 | 1 | **15** |
 
 ---
 
@@ -46,17 +44,17 @@ A threshold sweep assesses router sensitivity: scores below threshold trigger a 
 
 | Threshold | Accuracy | Correct / Total | Fallbacks to `general` |
 | :---: | :---: | :---: | :---: |
-| `0.30` | 92.2% | 59/64 | 0 |
-| `0.35` | 92.2% | 59/64 | 0 |
-| `0.40` | 92.2% | 59/64 | 0 |
-| `0.45` | 92.2% | 59/64 | 0 |
-| `0.50` | 92.2% | 59/64 | 1 |
-| `0.55` (Default) | 93.8% | 60/64 | 7 |
-| `0.60` | 92.2% | 59/64 | 12 |
-| `0.65` | 89.1% | 57/64 | 21 |
-| `0.70` | 64.1% | 41/64 | 38 |
-| `0.75` | 39.1% | 25/64 | 55 |
-| `0.80` | 26.6% | 17/64 | 63 |
+| `0.30` | 91.7% | 44/48 | 0 |
+| `0.35` | 91.7% | 44/48 | 0 |
+| `0.40` | 91.7% | 44/48 | 0 |
+| `0.45` | 91.7% | 44/48 | 0 |
+| `0.50` | 91.7% | 44/48 | 1 |
+| `0.55` (Default) | 93.8% | 45/48 | 7 |
+| `0.60` | 91.7% | 44/48 | 13 |
+| `0.65` | 87.5% | 42/48 | 21 |
+| `0.70` | 58.3% | 28/48 | 36 |
+| `0.75` | 37.5% | 18/48 | 46 |
+| `0.80` | 33.3% | 16/48 | 48 |
 
 ### Threshold Selection Rationale
 - **Selected Operating Threshold:** `0.55`

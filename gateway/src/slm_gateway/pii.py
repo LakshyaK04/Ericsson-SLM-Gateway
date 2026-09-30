@@ -17,7 +17,7 @@ from .config import Settings, settings
 
 logger = logging.getLogger(__name__)
 
-# Strict list of entities to redact per section 5.2
+# Strict list of entities to redact per Section 5.2
 # DO NOT include LOCATION or DATE_TIME to avoid breaking questions like "What is the capital of Germany?"
 DEFAULT_ENTITIES = [
     "PERSON",
@@ -26,7 +26,6 @@ DEFAULT_ENTITIES = [
     "CREDIT_CARD",
     "IP_ADDRESS",
     "EMPLOYEE_ID",
-    "PROJECT_CODENAME",
 ]
 
 
@@ -36,7 +35,7 @@ class PIIRedactionError(Exception):
 
 
 class PIIRedactor:
-    """Enterprise PII Redaction engine with Presidio and custom enterprise recognizers."""
+    """PII Redaction engine with Presidio and custom enterprise recognizers."""
 
     def __init__(self, config: Optional[Settings] = None):
         self.config = config or settings
@@ -90,15 +89,6 @@ class PIIRedactor:
             )
             self.analyzer.registry.add_recognizer(phone_recognizer)
 
-            # Custom Recognizer 3: PROJECT_CODENAME (from config deny-list)
-            codenames = self.config.project_codenames_list
-            if codenames:
-                codename_recognizer = PatternRecognizer(
-                    supported_entity="PROJECT_CODENAME",
-                    deny_list=codenames,
-                )
-                self.analyzer.registry.add_recognizer(codename_recognizer)
-
             logger.info("PIIRedactor initialized successfully with %d entities.", len(self.supported_entities))
         except Exception as e:
             logger.error("Failed to initialize Presidio PII engine: %s", str(e), exc_info=True)
@@ -109,6 +99,10 @@ class PIIRedactor:
 
     def redact(self, text: str) -> Tuple[str, int]:
         """Redact PII from the given text.
+
+        WHY: In an enterprise setting, sensitive user data (names, emails, IDs) must
+        never reach the model or logs. We scan inbound prompts and replace entities with
+        typed placeholders (e.g., <EMAIL_ADDRESS>) while preserving sentence structure.
 
         Args:
             text: Input string.

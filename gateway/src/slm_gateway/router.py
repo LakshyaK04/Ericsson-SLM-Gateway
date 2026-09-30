@@ -120,9 +120,10 @@ class IntentRouter:
     ) -> RoutingResult:
         """Classify a user query using top-k cosine similarity aggregation.
 
-        Computes cosine similarity to all exemplars, calculates the mean of the top-3
-        similarities for each intent, and returns the highest-scoring intent. If the
-        highest score is below threshold, falls back to 'general'.
+        WHY: Instead of hardcoded keywords or an expensive LLM call for routing,
+        we compute embedding cosine similarity against known exemplars. The mean of the
+        top-3 matches identifies whether the user wants general chat, technical discussion,
+        or document retrieval (RAG). If confidence is below threshold, it falls back to 'general'.
         """
         start_time = time.perf_counter()
         effective_threshold = threshold if threshold is not None else self.threshold

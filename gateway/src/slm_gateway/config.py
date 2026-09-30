@@ -21,9 +21,6 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = False
 
-    # Security
-    GATEWAY_API_KEY: Optional[str] = None
-
     # LLM Backend
     BACKEND: Literal["hf_local", "openai_compatible"] = "hf_local"
     BACKEND_URL: str = "http://localhost:8000"
@@ -44,21 +41,12 @@ class Settings(BaseSettings):
     ROUTER_MODEL_NAME: str = "BAAI/bge-small-en-v1.5"
     ROUTER_THRESHOLD: float = 0.55
     INTENTS_FILE: Optional[str] = None
-    STRUCTURED_JSON_SYSTEM_PROMPT: str = (
-        "You are an AI assistant that produces strict, valid JSON output only. "
-        "Do not include any conversational explanations, introductions, markdown fences, or commentary. "
-        "Return only the valid JSON payload."
-    )
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
-    PROJECT_CODENAMES: str = "Project-Titan,Project-Apollo,Project-Odin,Project-Thor,Project-Aegis"
     RAG_SERVICE_URL: str = "http://localhost:8001"
     RAG_TIMEOUT_SECONDS: float = 30.0
     RAG_DEFAULT_STRATEGY: str = "structure"
 
-    @property
-    def project_codenames_list(self) -> list[str]:
-        return [c.strip() for c in self.PROJECT_CODENAMES.split(",") if c.strip()]
-
 
 # Global settings singleton
 settings = Settings()
+

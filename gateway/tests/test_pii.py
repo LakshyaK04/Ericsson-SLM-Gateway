@@ -43,7 +43,6 @@ class RecordingMockBackend(LLMBackend):
 def redactor():
     cfg = Settings(
         PII_FAIL_MODE="closed",
-        PROJECT_CODENAMES="Project-Titan,Project-Apollo,Project-Odin,Project-Thor,Project-Aegis",
     )
     return PIIRedactor(cfg)
 
@@ -61,8 +60,6 @@ def redactor():
         ("Connect to 192.168.1.100 port 22.", "<IP_ADDRESS>", "IP_ADDRESS"),
         ("Employee EMP-12345 reported for duty.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
         ("Employee EMP-9876543 submitted the report.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
-        ("The architecture for Project-Titan was approved.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
-        ("Deployment of Project-Apollo is scheduled.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
     ],
 )
 def test_pii_entity_redaction(redactor, input_text, expected_placeholder, entity_type):
@@ -152,8 +149,7 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
 
     sensitive_content = (
         "Hello, my email is john.doe@ericsson.com, "
-        "my phone is +1-555-123-4567, employee ID is EMP-12345, "
-        "and I am assigned to Project-Titan."
+        "my phone is +1-555-123-4567, and employee ID is EMP-12345."
     )
 
     payload = {
@@ -163,13 +159,17 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
         ]
     }
 
-    response = client.post("/v1/chat/completions", json=payload)
+    response = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"X-Bypass-Router": "true"},
+    )
     assert response.status_code == 200
     data = response.json()
 
     # Verify redaction count in namespaced x_pii extension
     assert "x_pii" in data
-    assert data["x_pii"]["redactions"] >= 4
+    assert data["x_pii"]["redactions"] >= 3
 
     # CRITICAL: Verify the backend NEVER saw the raw PII!
     assert len(mock_backend.received_messages) == 2
@@ -181,13 +181,12 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
     assert "john.doe@ericsson.com" not in received_text
     assert "+1-555-123-4567" not in received_text
     assert "EMP-12345" not in received_text
-    assert "Project-Titan" not in received_text
 
     # Typed placeholders must be present
     assert "<EMAIL_ADDRESS>" in received_text
     assert "<PHONE_NUMBER>" in received_text
     assert "<EMPLOYEE_ID>" in received_text
-    assert "<PROJECT_CODENAME>" in received_text
+
 
 
 def test_gateway_fail_closed_returns_500(monkeypatch):

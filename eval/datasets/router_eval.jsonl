@@ -30,22 +30,6 @@
 {"query": "Explain how the Actor model manages concurrency without shared mutable state in Akka.", "intent": "technical"}
 {"query": "What is the mathematical definition and purpose of backpropagation in deep neural networks?", "intent": "technical"}
 {"query": "How do you optimize garbage collection pauses in Golang for high-throughput microservices?", "intent": "technical"}
-{"query": "Return the list of active network interfaces strictly as a JSON array of objects.", "intent": "structured_json"}
-{"query": "Convert this table of country populations into a clean, valid JSON dictionary.", "intent": "structured_json"}
-{"query": "Extract the customer name, order ID, and total cost into a JSON payload.", "intent": "structured_json"}
-{"query": "Provide the TCP connection states as a valid JSON list of strings without commentary.", "intent": "structured_json"}
-{"query": "Format the current routing table entries into a JSON object with destination and gateway keys.", "intent": "structured_json"}
-{"query": "Serialize this employee attendance log into a valid JSON array format.", "intent": "structured_json"}
-{"query": "Output the database schema definition as a strict JSON document.", "intent": "structured_json"}
-{"query": "Extract author and publication year from this citation into a JSON dictionary with keys 'author' and 'year'.", "intent": "structured_json"}
-{"query": "Parse this HTTP response header string and return the key-value pairs formatted as JSON.", "intent": "structured_json"}
-{"query": "Generate a JSON object containing the computed summary statistics: min, max, mean, and median.", "intent": "structured_json"}
-{"query": "Format the user preference settings into a valid JSON structure without markdown fences.", "intent": "structured_json"}
-{"query": "I need you to parse my grocery list and output strictly valid JSON with item and quantity fields.", "intent": "structured_json"}
-{"query": "Transform this CSV formatted string of product skus into a JSON list of objects.", "intent": "structured_json"}
-{"query": "Output the server hardware monitoring metrics strictly as a JSON formatted payload.", "intent": "structured_json"}
-{"query": "Generate a valid JSON array of error objects containing error_code and error_message.", "intent": "structured_json"}
-{"query": "Format the geo-location coordinates and timestamp into a standardized JSON representation.", "intent": "structured_json"}
 {"query": "According to the uploaded system design document, which port does the Redis cluster listen on?", "intent": "rag"}
 {"query": "What does the attached API integration specification document say about JSON error payloads?", "intent": "rag"}
 {"query": "What is the travel expense reimbursement limit stated in the company policy document?", "intent": "rag"}

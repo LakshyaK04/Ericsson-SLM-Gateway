@@ -23,7 +23,6 @@ from .schemas import (
     OpenAIErrorResponse,
     Usage,
 )
-from .security import verify_api_key
 
 # Configure logging per rule 7: use logging, not print
 logging.basicConfig(
@@ -192,9 +191,7 @@ async def ready():
 # ============================================================
 
 @app.get("/v1/models", response_model=ModelListResponse)
-async def list_models(
-    _auth: None = Depends(verify_api_key),
-):
+async def list_models():
     """Return loaded model in OpenAI list format."""
     model_name = backend.get_model_name() if backend else settings.MODEL_ID
     return ModelListResponse(
@@ -211,10 +208,14 @@ async def list_models(
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(
     request: ChatCompletionRequest,
-    _auth: None = Depends(verify_api_key),
     x_bypass_router: Optional[str] = Header(None, alias="X-Bypass-Router"),
 ):
-    """Generate chat completions conforming to the OpenAI API specification."""
+    """Generate chat completions conforming to the OpenAI API specification.
+
+    WHY: This is the core 'front door' for all user requests. It ensures incoming
+    prompts are scrubbed of PII before any model sees them, routes to RAG only when
+    document context is required, and formats results in standard OpenAI shape.
+    """
     if request.stream:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -287,24 +288,8 @@ async def chat_completions(
         route_result = router.classify(query_to_route)
         x_routing = route_result.to_dict()
 
-        # Apply intent effects per section 5.3
-        if route_result.intent == "structured_json":
-            has_system = False
-            for m in sanitized_messages:
-                if m.get("role") == "system":
-                    m["content"] = f"{m['content']}\n\n{settings.STRUCTURED_JSON_SYSTEM_PROMPT}"
-                    has_system = True
-                    break
-            if not has_system:
-                sanitized_messages.insert(
-                    0,
-                    {
-                        "role": "system",
-                        "content": settings.STRUCTURED_JSON_SYSTEM_PROMPT,
-                    },
-                )
-
-        elif route_result.intent == "rag":
+        # Apply intent effects: 'rag' calls the RAG service if documents are indexed
+        if route_result.intent == "rag":
             rag_cli = rag_client_instance or RAGClient(settings)
             has_docs, check_err = await rag_cli.has_indexed_documents()
             if not has_docs:

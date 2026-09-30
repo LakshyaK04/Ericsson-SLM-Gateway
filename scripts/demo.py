@@ -1,36 +1,29 @@
-"""Interactive 5-Minute Demonstration Script for Ericsson Local GenAI Stack.
+"""Demonstration Script for Ericsson Local GenAI Stack.
 
-Executes a structured end-to-end live demonstration of:
-1. Health and readiness verification
-2. Standard chat completion (general intent)
-3. PII detection and redaction (x_pii)
-4. Structured JSON output enforcement
-5. Document ingestion and grounded RAG query with source citations (x_sources)
-6. Empirical chunking evaluation summary table
+Executes a 4-scene live demonstration:
+1. Health check (Gateway & RAG service)
+2. Normal chat completion (general intent)
+3. PII masking (Presidio/spaCy)
+4. Grounded RAG query with sources (structure chunking + cross-encoder)
 """
 
 import argparse
 import json
+from pathlib import Path
 import sys
 import time
-from pathlib import Path
 import httpx
 
 GATEWAY_DEFAULT_URL = "http://localhost:8000"
 RAG_DEFAULT_URL = "http://localhost:8001"
 
 SEPARATOR = "=" * 80
-SUBSEP = "-" * 80
 
 
 def print_header(title: str, step: int):
     print("\n" + SEPARATOR)
     print(f"  SCENE {step}: {title.upper()}")
     print(SEPARATOR + "\n")
-
-
-def print_json(data: dict):
-    print(json.dumps(data, indent=2))
 
 
 def check_services(gateway_url: str, rag_url: str) -> bool:
@@ -55,23 +48,23 @@ def check_services(gateway_url: str, rag_url: str) -> bool:
 
 
 def demo_standard_chat(gateway_url: str):
-    print_header("Standard Chat Completion (Intent: General)", 2)
+    print_header("Normal Chat Completion (Intent: General)", 2)
     prompt = "What is the capital of Sweden and what is it famous for?"
     print(f"[*] Prompt: '{prompt}'")
-    
+
     payload = {
         "model": "microsoft/Phi-3-mini-4k-instruct",
         "messages": [
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 128
+        "max_tokens": 128,
     }
-    
+
     t0 = time.perf_counter()
     r = httpx.post(f"{gateway_url}/v1/chat/completions", json=payload, timeout=60.0)
     lat = (time.perf_counter() - t0) * 1000
-    
+
     if r.status_code == 200:
         res = r.json()
         print(f"\n[*] Response received in {lat:.1f}ms:")
@@ -83,22 +76,22 @@ def demo_standard_chat(gateway_url: str):
 
 
 def demo_pii_redaction(gateway_url: str):
-    print_header("PII Masking & Privacy Protection (Presidio)", 3)
+    print_header("PII Masking & Privacy Protection", 3)
     prompt = (
         "Hello, I am Alice Smith (EMP-84920). My contact is alice.smith@ericsson.com "
-        "or +46-8-555-1234. I am currently working on Project-Titan in Stockholm."
+        "or +46-8-555-1234. I work at the headquarters in Stockholm."
     )
     print("[*] Original Inbound User Query:")
     print(f"    \"{prompt}\"")
     print("\n[*] Sending query through Gateway /v1/chat/completions...")
-    
+
     payload = {
         "messages": [
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 64
+        "max_tokens": 64,
     }
-    
+
     r = httpx.post(f"{gateway_url}/v1/chat/completions", json=payload, timeout=60.0)
     if r.status_code == 200:
         res = r.json()
@@ -111,45 +104,19 @@ def demo_pii_redaction(gateway_url: str):
         print(f"[!] Request failed: HTTP {r.status_code}: {r.text}")
 
 
-def demo_structured_json(gateway_url: str):
-    print_header("Structured JSON Intent & Schema Enforcement", 4)
-    prompt = (
-        "Return a JSON list of three 5G core network functions. "
-        "Each object should have keys 'acronym' and 'function_name'."
-    )
-    print(f"[*] Prompt: '{prompt}'")
-    
-    payload = {
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.2,
-        "max_tokens": 200
-    }
-    
-    r = httpx.post(f"{gateway_url}/v1/chat/completions", json=payload, timeout=60.0)
-    if r.status_code == 200:
-        res = r.json()
-        print(f"\n[*] Routing Metadata: {res.get('x_routing')}")
-        print("[*] Output Content:")
-        print(res['choices'][0]['message']['content'])
-    else:
-        print(f"[!] Request failed: HTTP {r.status_code}: {r.text}")
-
-
 def demo_rag_pipeline(gateway_url: str, rag_url: str):
-    print_header("Document Ingestion & Grounded RAG with Citations", 5)
-    
+    print_header("Grounded RAG Query with Sources", 4)
+
     pdf_path = Path("eval/docs/ericsson_rag_sample.pdf")
     if not pdf_path.exists():
         print(f"[!] Reference document {pdf_path} not found.")
         return
-        
+
     print(f"[*] Uploading and indexing '{pdf_path.name}' to RAG Service (port 8001)...")
     with open(pdf_path, "rb") as f:
         files = {"file": (pdf_path.name, f, "application/pdf")}
         r = httpx.post(f"{rag_url}/documents", files=files, timeout=60.0)
-        
+
     if r.status_code == 200:
         print(f"    - Indexing Success: {r.json()}")
     else:
@@ -162,18 +129,18 @@ def demo_rag_pipeline(gateway_url: str, rag_url: str):
     )
     print(f"\n[*] Querying through Gateway (Front Door Port 8000):")
     print(f"    \"{query}\"")
-    
+
     payload = {
         "messages": [
             {"role": "user", "content": query}
         ],
-        "max_tokens": 150
+        "max_tokens": 150,
     }
-    
+
     t0 = time.perf_counter()
     r = httpx.post(f"{gateway_url}/v1/chat/completions", json=payload, timeout=60.0)
     lat = (time.perf_counter() - t0) * 1000
-    
+
     if r.status_code == 200:
         res = r.json()
         print(f"\n[*] Grounded RAG Completion ({lat:.1f}ms):")
@@ -191,9 +158,9 @@ def demo_rag_pipeline(gateway_url: str, rag_url: str):
 
 
 def demo_chunking_comparison():
-    print_header("Empirical Chunking Strategy & Re-Ranking Benchmark", 6)
     print("""
-Evaluated on 36 technical queries across 3 technical telecommunications PDFs:
+Empirical Chunking Strategy & Re-Ranking Results:
+(Tested on small synthetic set of 3 PDFs / 5 pages from scripts/create_eval_docs.py and 36 questions)
 
 +-------------+-----------+--------------+------------+-----------+-----------+--------+--------------+
 | Strategy    | Re-ranker | Total Chunks | Avg Length | Hit@1 (%) | Hit@3 (%) | MRR    | Latency (ms) |
@@ -206,10 +173,10 @@ Evaluated on 36 technical queries across 3 technical telecommunications PDFs:
 | semantic    | On        | 16           | 387.2 ch   | 94.44%    | 97.22%    | 0.9583 | 166.9 ms     |
 +-------------+-----------+--------------+------------+-----------+-----------+--------+--------------+
 
-Key Takeaways:
-1. 'structure' chunking + cross-encoder achieved a perfect 100.0% Hit@1 and MRR 1.0000.
-2. Cross-encoder re-ranking provided a +13.89% uplift for structure and +13.88% for semantic.
-3. Neural re-ranking adds ~145ms latency over pure dense search (~10ms), an excellent trade-off for high accuracy.
+Observations:
+1. Re-ranking improved structure chunking (Hit@1: 86.1% -> 100.0%) and semantic chunking (Hit@1: 80.6% -> 94.4%).
+2. Re-ranking did not improve character chunking on Hit@1 (86.11% without vs 83.33% with).
+3. Re-ranking adds ~140-155ms cross-encoder inference latency per query.
 """)
 
 
@@ -227,7 +194,7 @@ def main():
     print("\n" + SEPARATOR)
     print("      ERICSSON LOCAL GENAI STACK: LIVE DEMONSTRATION")
     print(SEPARATOR)
-    
+
     if not check_services(args.gateway_url, args.rag_url):
         print("\n[!] Could not connect to running services.")
         print("[!] Ensure Gateway (port 8000) and RAG (port 8001) are running, or run with --benchmark-only.")
@@ -237,9 +204,7 @@ def main():
 
     demo_standard_chat(args.gateway_url)
     demo_pii_redaction(args.gateway_url)
-    demo_structured_json(args.gateway_url)
     demo_rag_pipeline(args.gateway_url, args.rag_url)
-    demo_chunking_comparison()
 
     print("\n" + SEPARATOR)
     print("      DEMONSTRATION COMPLETED SUCCESSFULLY")

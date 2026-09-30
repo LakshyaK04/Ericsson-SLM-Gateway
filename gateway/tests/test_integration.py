@@ -56,7 +56,7 @@ def client():
     return TestClient(app)
 
 
-def test_rag_routing_with_indexed_documents_returns_sources(client):
+def test_rag_routing_with_indexed_documents_returns_sources(client, monkeypatch):
     """When intent is RAG and documents are indexed, gateway calls RAG and returns x_sources."""
     mock_rag_client = AsyncMock(spec=RAGClient)
     mock_rag_client.has_indexed_documents.return_value = (True, None)
@@ -84,7 +84,7 @@ def test_rag_routing_with_indexed_documents_returns_sources(client):
     )
 
     import slm_gateway.main as main_mod
-    main_mod.rag_client_instance = mock_rag_client
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
         "messages": [
@@ -103,13 +103,13 @@ def test_rag_routing_with_indexed_documents_returns_sources(client):
     assert data["usage"]["total_tokens"] == 138
 
 
-def test_rag_routing_with_no_documents_downgrades_to_local_model(client):
+def test_rag_routing_with_no_documents_downgrades_to_local_model(client, monkeypatch):
     """When intent is RAG but no documents are indexed, gateway falls back cleanly to local model."""
     mock_rag_client = AsyncMock(spec=RAGClient)
     mock_rag_client.has_indexed_documents.return_value = (False, "no_documents_indexed")
 
     import slm_gateway.main as main_mod
-    main_mod.rag_client_instance = mock_rag_client
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
         "messages": [
@@ -127,13 +127,13 @@ def test_rag_routing_with_no_documents_downgrades_to_local_model(client):
     assert data["x_routing"]["route"] == "hf_local"
 
 
-def test_rag_routing_service_offline_downgrades_to_local_model(client):
+def test_rag_routing_service_offline_downgrades_to_local_model(client, monkeypatch):
     """When intent is RAG but RAG service is unreachable, gateway falls back cleanly without 500 error."""
     mock_rag_client = AsyncMock(spec=RAGClient)
     mock_rag_client.has_indexed_documents.return_value = (False, "rag_service_offline")
 
     import slm_gateway.main as main_mod
-    main_mod.rag_client_instance = mock_rag_client
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
         "messages": [
@@ -150,11 +150,11 @@ def test_rag_routing_service_offline_downgrades_to_local_model(client):
     assert data["x_routing"]["route"] == "hf_local"
 
 
-def test_bypass_router_header_prevents_infinite_loop(client):
+def test_bypass_router_header_prevents_infinite_loop(client, monkeypatch):
     """X-Bypass-Router: true skips intent routing completely, enabling RAG service to call gateway."""
     mock_rag_client = AsyncMock(spec=RAGClient)
     import slm_gateway.main as main_mod
-    main_mod.rag_client_instance = mock_rag_client
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     # A query that would otherwise trigger RAG
     payload = {

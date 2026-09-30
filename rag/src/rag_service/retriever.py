@@ -43,6 +43,11 @@ class Retriever:
     ) -> List[QueryResultItem]:
         """Execute two-stage retrieval and return re-ranked chunks with both scores.
 
+        WHY: Dense bi-encoder search (BGE-small) is fast (~10ms) to retrieve an initial
+        candidate pool of 20 chunks from ChromaDB. The neural cross-encoder (bge-reranker-base)
+        then applies deep cross-attention across (query, text) pairs to accurately filter down
+        to the top 3 chunks for downstream answer generation.
+
         Args:
             query: User search query.
             strategy: Chunking strategy to query ('character', 'structure', 'semantic').

@@ -15,12 +15,12 @@ def router():
 
 
 def test_intents_yaml_contains_all_intents_with_minimum_exemplars():
-    """Verify intents.yaml contains at least 25 exemplars per intent per spec 5.3."""
+    """Verify intents.yaml contains at least 25 exemplars per intent."""
     import yaml
     with open(DEFAULT_INTENTS_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    expected_intents = {"general", "technical", "structured_json", "rag"}
+    expected_intents = {"general", "technical", "rag"}
     assert set(data.keys()) == expected_intents, f"Expected intents {expected_intents}, got {set(data.keys())}"
 
     for intent, examples in data.items():
@@ -30,7 +30,7 @@ def test_intents_yaml_contains_all_intents_with_minimum_exemplars():
 def test_router_initialization(router):
     """Verify router loads model and precomputes normalized embeddings."""
     assert router.model is not None
-    assert len(router.example_texts) >= 100  # 4 * 25 minimum
+    assert len(router.example_texts) >= 75  # 3 * 25 minimum
     assert router.example_embeddings.shape[0] == len(router.example_texts)
     assert router.example_embeddings.shape[1] == 384  # bge-small dimension
 
@@ -46,14 +46,12 @@ def test_router_initialization(router):
         ("Tell me an amusing joke about computers.", "general"),
         ("How do I implement a red-black tree in C++?", "technical"),
         ("Explain how the Raft consensus algorithm works.", "technical"),
-        ("Return the server telemetry metrics as a strict JSON object.", "structured_json"),
-        ("Format the employee directory as a JSON list without markdown.", "structured_json"),
         ("What does the uploaded company policy say about sabbatical leave?", "rag"),
         ("According to the attached PDF, what is the warranty period?", "rag"),
     ],
 )
 def test_router_classification_accuracy(router, query, expected_intent):
-    """Test classification on clear representative queries across all 4 intents."""
+    """Test classification on clear representative queries across all 3 intents."""
     result = router.classify(query)
     assert isinstance(result, RoutingResult)
     assert result.intent == expected_intent
