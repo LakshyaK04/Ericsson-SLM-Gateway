@@ -25,11 +25,11 @@ The project has been refocused around its core requirements and stripped of cogn
 | **Authentication** | Bearer auth (`security.py`, `GATEWAY_API_KEY`) | Removed / de-emphasized | `security.py` deleted; removed from all flow diagrams and docs | Verified |
 | **RAG Terminology** | "Hybrid RAG" claimed everywhere | RAG / dense retrieval + reranking | Corrected to "RAG Pipeline" / "Dense Retrieval + Cross-Encoder Re-Ranking" | Verified |
 | **Architecture Diagram** | Included auth, JSON route, multiple backends | Simple core flow | Single clean flow: User $\to$ Gateway $\to$ PII $\to$ Router $\to$ Phi-3 OR RAG $\to$ Phi-3 $\to$ User | Verified in `ARCHITECTURE.md` |
-| **Demo Script** | 6 scenes including structured JSON | Focus on core gateway + RAG story | 5 clean scenes focusing on routing, PII, chunking, reranking, and generation | Verified in `docs/DEMO_SCRIPT.md` |
+| **Demo Script** | 6 scenes including structured JSON | Focus on core gateway + RAG story | 12-step presentation script focusing on core gateway routing, PII, chunking, reranking, and generation | Verified in `docs/DEMO_SCRIPT.md` |
 | **Presentation Scope** | Not present | Defined scope document | [`docs/PRESENTATION_SCOPE.md`](file:///d:/CODING%20FILES/Ericsson/phi3-project/docs/PRESENTATION_SCOPE.md) created | Complete |
 | **Study File Guide** | Not present | 10–15 core files guide | [`docs/STUDY_FILES.md`](file:///d:/CODING%20FILES/Ericsson/phi3-project/docs/STUDY_FILES.md) created (14 core files categorized) | Complete |
 | **Marketing Language** | "Enterprise-grade", "production-ready" | Honest, modest engineering terms | Buzzwords removed across all docs and docstrings | Complete |
-| **RAG Retrieval** | Dense top-20 $\to$ cross-encoder top-3 | Dense top-20 $\to$ cross-encoder top-3 | Kept intact (`all-MiniLM-L6-v2` + `ms-marco-MiniLM-L-6-v2`) | Verified (100% Hit@1 on structure chunking) |
+| **RAG Retrieval** | Dense top-20 $\to$ cross-encoder top-3 | Dense top-20 $\to$ cross-encoder top-3 | Kept intact (`BAAI/bge-small-en-v1.5` + `BAAI/bge-reranker-base`) | Verified (100% Hit@1 on structure chunking) |
 | **Chunking** | Character + structure + semantic | Character + structure + semantic | Kept intact; tested against 5-page Ericsson PDF corpus | Verified |
 | **PII Redaction** | Presidio + spaCy + custom recognizers | Presidio + spaCy | Presidio with custom `EMPLOYEE_ID`; location/date preserved | Verified (16 tests pass) |
 | **Phi-3 Serving** | In-process HF + 4-bit NF4 | In-process HF + 4-bit NF4 | Kept intact (`bitsandbytes` NF4, single-GPU semaphore) | Verified |
