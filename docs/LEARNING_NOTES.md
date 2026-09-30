@@ -216,7 +216,6 @@ We built an evaluation pipeline in `eval/router_eval.py` & `eval/datasets/router
 - **Top-3 similarity averaging instead of 1-NN** because 1-NN is fragile to incidental word overlap. Top-3 averaging requires consistent semantic affinity across multiple diverse exemplars.
 - **Precomputed embeddings at startup** so request classification only requires encoding a single query string and doing a fast matrix-vector dot product (`cosine_similarity`).
 - **Automated zero-leakage validator in evaluation** ensuring evaluation scores reflect true generalization to unseen phrasing rather than memorized sentences.
-- **System prompt injection for `structured_json`** directly steering the small language model (Phi-3) toward valid JSON generation without requiring expensive fine-tuning.
 
 ### Mentor questions
 
@@ -251,7 +250,7 @@ uv run python eval/pii_eval.py
 
 ### What was built
 
-We implemented the multi-strategy Hybrid RAG microservice in `rag/src/rag_service/`, running as an independent HTTP service on port 8001.
+We implemented the multi-strategy RAG service in `rag/src/rag_service/`, running as an independent HTTP service on port 8001.
 
 We implemented the document chunking module with a unified `Chunk` dataclass (`chunk_id, text, source, page, strategy`):
 1. `character.py`: Splits text into fixed-size chunks (`chunk_size=500`, `overlap=50`) while snapping boundaries backwards to the nearest whitespace to avoid amputating words or symbols.
@@ -417,7 +416,7 @@ type eval\results\chunking_report.csv
 
 ### What was built
 
-We integrated the SLM Gateway (port 8000) and the Hybrid RAG Service (port 8001) into a unified, enterprise-grade architecture:
+We integrated the SLM Gateway (port 8000) and the RAG Service (port 8001) into a clean, unified architecture:
 
 1. **RAG Grounded Generation Engine (`rag/src/rag_service/generation.py`)**:
    - `build_grounded_prompt()` formats retrieved chunks into numbered context blocks (`[1]`, `[2]`, `[3]`) complete with source document names and page metadata.

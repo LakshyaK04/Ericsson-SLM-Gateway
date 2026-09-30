@@ -1,12 +1,12 @@
-# Solution Document: Hybrid RAG Ingestion, Retrieval & Evaluation Engine
+# Solution Document: RAG Ingestion, Retrieval & Evaluation Engine
 
-This document outlines the architecture, component implementation, empirical benchmarks, and operational design of the **Hybrid RAG Service** (`rag_service`).
+This document outlines the architecture, component implementation, empirical benchmarks, and operational design of the **RAG Service** (`rag_service`).
 
 ---
 
 ## 1. System Overview
 
-The **Hybrid RAG Service** provides document ingestion, multi-strategy text segmentation, dense vector search, neural cross-encoder re-ranking, and grounded generation for technical documentation.
+The **RAG Service** provides document ingestion, multi-strategy text segmentation, dense vector search, neural cross-encoder re-ranking, and grounded generation for technical documentation.
 
 ### Core Capabilities
 - **Multi-Format Parsing**: PyMuPDF-based PDF extraction and `python-docx` parser supporting native headings and bullet lists.
