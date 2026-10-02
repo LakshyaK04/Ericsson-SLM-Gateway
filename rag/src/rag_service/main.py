@@ -268,6 +268,7 @@ async def query_documents(request: QueryRequest):
         doc_ids=request.doc_ids,
         use_reranker=request.use_reranker,
         retrieval_mode=request.retrieval_mode,
+        rrf_k=request.rrf_k,
     )
 
     return QueryResponse(

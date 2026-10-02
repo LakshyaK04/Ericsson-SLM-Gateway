@@ -137,3 +137,43 @@ def test_hybrid_retrieval_with_bm25_and_rrf(tiny_corpus_retriever):
     assert top.bm25_score is not None and top.bm25_score > 0.0
     assert top.rrf_score is not None and top.rrf_score > 0.0
 
+
+def test_sparse_retrieval_mode(tiny_corpus_retriever):
+    """Sparse retrieval mode uses only BM25 keyword matching."""
+    retriever, store = tiny_corpus_retriever
+
+    query = "PostgreSQL MVCC transaction isolation"
+    results = retriever.retrieve(
+        query=query,
+        strategy="structure",
+        retrieve_k=4,
+        final_k=2,
+        use_reranker=False,
+        retrieval_mode="sparse",
+    )
+
+    assert len(results) > 0
+    top = results[0]
+    assert "PostgreSQL" in top.text
+    assert top.bm25_score is not None and top.bm25_score > 0.0
+
+
+def test_hybrid_custom_rrf_k(tiny_corpus_retriever):
+    """Custom rrf_k factor modifies RRF scoring correctly."""
+    retriever, store = tiny_corpus_retriever
+
+    query = "B-Tree indexes range scans"
+    results = retriever.retrieve(
+        query=query,
+        strategy="structure",
+        retrieve_k=4,
+        final_k=2,
+        use_reranker=False,
+        retrieval_mode="hybrid",
+        rrf_k=20,
+    )
+
+    assert len(results) > 0
+    top = results[0]
+    assert top.rrf_score is not None and top.rrf_score > 0.0
+

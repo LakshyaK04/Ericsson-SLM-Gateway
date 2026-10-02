@@ -59,6 +59,7 @@ class Retriever:
         doc_ids: Optional[List[str]] = None,
         use_reranker: bool = True,
         retrieval_mode: str = "hybrid",
+        rrf_k: int = 60,
     ) -> List[QueryResultItem]:
         """Execute hybrid two-stage retrieval and return re-ranked chunks with all scores.
 
@@ -75,7 +76,8 @@ class Retriever:
             final_k: Number of top re-ranked chunks to return (default 3).
             doc_ids: Optional list of document IDs to scope search.
             use_reranker: Whether to apply neural cross-encoder re-ranking (default True).
-            retrieval_mode: 'hybrid' (BM25 + Dense RRF) or 'dense' (vector only).
+            retrieval_mode: 'hybrid' (BM25 + Dense RRF), 'sparse' (BM25 only), or 'dense' (vector only).
+            rrf_k: Reciprocal Rank Fusion smoothing constant (default 60).
 
         Returns:
             List of QueryResultItem instances.
@@ -83,16 +85,24 @@ class Retriever:
         if not query or not query.strip():
             return []
 
-        # Stage 1A: Dense Bi-Encoder Retrieval
-        query_embedding = self.embedding_model.encode_query(query)
-        dense_candidates = self.store.query(
-            strategy=strategy,
-            query_embedding=query_embedding,
-            n_results=retrieve_k,
-            doc_ids=doc_ids,
-        )
+        if retrieval_mode in ("sparse", "bm25"):
+            # Sparse Lexical Retrieval Only (BM25)
+            bm25_idx = self._get_bm25_index(strategy)
+            candidates = bm25_idx.search(
+                query=query,
+                top_k=retrieve_k,
+                doc_ids=doc_ids,
+            )
+        elif retrieval_mode == "hybrid":
+            # Stage 1A: Dense Bi-Encoder Retrieval
+            query_embedding = self.embedding_model.encode_query(query)
+            dense_candidates = self.store.query(
+                strategy=strategy,
+                query_embedding=query_embedding,
+                n_results=retrieve_k,
+                doc_ids=doc_ids,
+            )
 
-        if retrieval_mode == "hybrid":
             # Stage 1B: Sparse Lexical Retrieval (BM25)
             bm25_idx = self._get_bm25_index(strategy)
             lexical_candidates = bm25_idx.search(
@@ -105,11 +115,18 @@ class Retriever:
             candidates = reciprocal_rank_fusion(
                 dense_results=dense_candidates,
                 lexical_results=lexical_candidates,
-                rrf_k=60,
+                rrf_k=rrf_k,
                 top_k=retrieve_k,
             )
         else:
-            candidates = dense_candidates
+            # Dense Vector Retrieval Only
+            query_embedding = self.embedding_model.encode_query(query)
+            candidates = self.store.query(
+                strategy=strategy,
+                query_embedding=query_embedding,
+                n_results=retrieve_k,
+                doc_ids=doc_ids,
+            )
 
         if not candidates:
             logger.info("No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy)
@@ -123,7 +140,12 @@ class Retriever:
                 top_k=final_k,
             )
         else:
-            sort_key = "rrf_score" if retrieval_mode == "hybrid" else "dense_score"
+            if retrieval_mode == "hybrid":
+                sort_key = "rrf_score"
+            elif retrieval_mode in ("sparse", "bm25"):
+                sort_key = "bm25_score"
+            else:
+                sort_key = "dense_score"
             reranked = sorted(candidates, key=lambda c: c.get(sort_key, 0.0), reverse=True)[:final_k]
 
         # Convert to Pydantic items

@@ -42,10 +42,11 @@ class QueryRequest(BaseModel):
     final_k: int = Field(default=3, ge=1, le=50)
     doc_ids: Optional[List[str]] = None
     use_reranker: bool = Field(default=True, description="Whether to apply neural cross-encoder re-ranking.")
-    retrieval_mode: Literal["dense", "hybrid"] = Field(
+    retrieval_mode: Literal["dense", "sparse", "hybrid"] = Field(
         default="hybrid",
-        description="Retrieval mode: 'dense' (BGE vector search) or 'hybrid' (BM25 + Dense RRF fusion).",
+        description="Retrieval mode: 'dense' (BGE vector search), 'sparse' (BM25 search), or 'hybrid' (BM25 + Dense RRF fusion).",
     )
+    rrf_k: int = Field(default=60, ge=1, le=1000, description="Reciprocal Rank Fusion smoothing parameter.")
 
 
 class QueryResultItem(BaseModel):

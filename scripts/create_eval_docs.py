@@ -95,6 +95,58 @@ Section 4. Privacy and Guardrails
 Incoming user prompts are checked for personally identifiable information (PII). Detected PII entities like email addresses, phone numbers, employee IDs, and internal codenames are replaced with anonymized placeholders before model inference."""
 ]
 
+doc4_pages = [
+    """Distributed Consensus Architecture & Raft Protocol Specification
+
+Section 1. Core State Machine Replication & Node Roles
+In distributed state machine replication, consensus guarantees that a cluster of replicated state machines produces identical execution sequences despite network partitions and arbitrary node crashes (fail-stop model). The Raft protocol divides time into numbered terms of arbitrary duration, acting as a logical clock to detect stale state.
+
+Each cluster node operates in one of three distinct roles:
+1. Follower: Passive responder to Remote Procedure Calls (RPCs). If no communication is received within the randomized election timeout window, the follower transitions to candidate state.
+2. Candidate: Initiates leader election by incrementing currentTerm, voting for self, and broadcasting RequestVote RPCs to all peers.
+3. Leader: Manages all client write proposals, appends entries to its local Write-Ahead Log (WAL), and drives log replication across quorum peers.
+
+Cluster Timing Invariants:
+- Heartbeat Interval: Default is 50 ms (must be substantially smaller than broadcast time).
+- Election Timeout: Randomized window between 150 ms and 300 ms to break split-vote ties.
+- Client Port: 2379 for client requests; Peer Port: 2380 for inter-node raft replication.""",
+
+    """Section 2. Log Replication Protocol & Quorum Invariants
+
+When the leader receives a state transition command from a client, it assigns a monotonic log index and the current term number. The entry is appended to its local log and broadcast via AppendEntries RPCs.
+
+AppendEntries RPC Structure and Fields:
+- term: Leader's current term number.
+- leaderId: Identifier so followers can redirect client connections.
+- prevLogIndex: Index of log entry immediately preceding new entries.
+- prevLogTerm: Term of prevLogIndex entry.
+- entries[]: Array of log entries to store (empty for periodic heartbeats).
+- leaderCommit: Leader's current commitIndex.
+
+Log Matching Property & Invariants:
+1. If two entries in different logs have the exact same index and term, they store the exact same command.
+2. If two entries in different logs have the same index and term, then their logs are identical in all preceding entries.
+
+Error Codes and Handling:
+- ERR_TERM_OUTDATED (Code 4010): Returned when a sender's term is lower than the receiver's currentTerm; the sender immediately steps down to follower.
+- ERR_LOG_DIVERGENCE (Code 4020): Returned when the receiver's log does not contain an entry matching prevLogIndex and prevLogTerm; the leader decrements nextIndex and retries.""",
+
+    """Section 3. Joint Consensus, Log Compaction, and Snapshotting
+
+Cluster Membership Changes:
+Dynamic configuration changes (adding or removing nodes) employ a two-phase Joint Consensus approach. During transition, decisions require independent majorities from both the old configuration (C_old) and the new configuration (C_new). Once the joint consensus entry is committed, the leader commits the final C_new configuration.
+
+Log Compaction and Storage Engine:
+Unbounded log growth exhausts memory and disk storage. Raft utilizes asynchronous snapshotting:
+1. State Machine Snapshots: Periodic checkpoint of the entire deterministic state machine serialized to disk.
+2. Compaction Threshold: Default triggers when WAL exceeds 10,000 uncompacted entries or 64 MB.
+3. InstallSnapshot RPC: Invoked when a lagging follower's nextIndex falls behind the leader's oldest compacted WAL entry.
+
+Fault Tolerance Guarantees:
+A Raft cluster of N nodes maintains availability and linearizable read/write consistency under up to F = floor((N - 1) / 2) concurrent failures, verified against Jepsen network partition test suites."""
+]
+
 create_pdf(DOCS_DIR / "enterprise_rag_sample.pdf", doc1_pages)
 create_pdf(DOCS_DIR / "5g_core_architecture.pdf", doc2_pages)
 create_pdf(DOCS_DIR / "cloud_native_telecom_infrastructure.pdf", doc3_pages)
+create_pdf(DOCS_DIR / "distributed_consensus_raft_spec.pdf", doc4_pages)
