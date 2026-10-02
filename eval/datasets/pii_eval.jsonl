@@ -1,0 +1,33 @@
+{"text": "Contact me at alice@ericsson.com for details.", "expected_entity": "EMAIL_ADDRESS", "expected_placeholder": "<EMAIL_ADDRESS>", "should_redact": true, "category": "recall"}
+{"text": "Send the report to john.doe@company.se as soon as possible.", "expected_entity": "EMAIL_ADDRESS", "expected_placeholder": "<EMAIL_ADDRESS>", "should_redact": true, "category": "recall"}
+{"text": "Call me at +1-555-123-4567 to discuss the project timeline.", "expected_entity": "PHONE_NUMBER", "expected_placeholder": "<PHONE_NUMBER>", "should_redact": true, "category": "recall"}
+{"text": "My work mobile is (408) 555-9012, please text me.", "expected_entity": "PHONE_NUMBER", "expected_placeholder": "<PHONE_NUMBER>", "should_redact": true, "category": "recall"}
+{"text": "Please charge card 4532-0151-1283-0366 for the subscription.", "expected_entity": "CREDIT_CARD", "expected_placeholder": "<CREDIT_CARD>", "should_redact": true, "category": "recall"}
+{"text": "The payment was processed on Visa 4916338506082832.", "expected_entity": "CREDIT_CARD", "expected_placeholder": "<CREDIT_CARD>", "should_redact": true, "category": "recall"}
+{"text": "Connect to server at 192.168.1.100 on port 22.", "expected_entity": "IP_ADDRESS", "expected_placeholder": "<IP_ADDRESS>", "should_redact": true, "category": "recall"}
+{"text": "The firewall blocks traffic from 10.0.0.55 by default.", "expected_entity": "IP_ADDRESS", "expected_placeholder": "<IP_ADDRESS>", "should_redact": true, "category": "recall"}
+{"text": "My name is John Doe and I work at Ericsson.", "expected_entity": "PERSON", "expected_placeholder": "<PERSON>", "should_redact": true, "category": "recall"}
+{"text": "Manager Sarah Johnson approved the deployment plan.", "expected_entity": "PERSON", "expected_placeholder": "<PERSON>", "should_redact": true, "category": "recall"}
+{"text": "Forward the request to David Williams immediately.", "expected_entity": "PERSON", "expected_placeholder": "<PERSON>", "should_redact": true, "category": "recall"}
+{"text": "Employee EMP-12345 reported for duty at 8 AM.", "expected_entity": "EMPLOYEE_ID", "expected_placeholder": "<EMPLOYEE_ID>", "should_redact": true, "category": "recall"}
+{"text": "Badge EMP-9876543 was used to access the server room.", "expected_entity": "EMPLOYEE_ID", "expected_placeholder": "<EMPLOYEE_ID>", "should_redact": true, "category": "recall"}
+{"text": "Staff member EMP-55555 submitted the quarterly report.", "expected_entity": "EMPLOYEE_ID", "expected_placeholder": "<EMPLOYEE_ID>", "should_redact": true, "category": "recall"}
+{"text": "Project Phoenix is scheduled for delivery next quarter.", "expected_entity": "PROJECT_CODENAME", "expected_placeholder": "<PROJECT_CODENAME>", "should_redact": true, "category": "recall"}
+{"text": "The Titan initiative has been approved by the board.", "expected_entity": "PROJECT_CODENAME", "expected_placeholder": "<PROJECT_CODENAME>", "should_redact": true, "category": "recall"}
+{"text": "What is the capital of Germany?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "Explain photosynthesis in plants.", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "How do I sort a list in Python?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "The conference will take place on Monday at 3 PM in Stockholm.", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "What does an HTTP 404 status code mean?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "How do I implement a binary search algorithm?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "Explain the difference between TCP and UDP protocols.", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "What happened during the French Revolution in 1789?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "How does the TLS 1.3 handshake achieve forward secrecy?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "What is the boiling point of water at sea level?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "How do Kubernetes pods communicate across cluster nodes?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "Describe the lifecycle of a butterfly.", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "What are the ACID guarantees in database systems?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "How does the Border Gateway Protocol evaluate path attributes?", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "Explain how gRPC leverages HTTP/2 multiplexing.", "expected_entity": null, "expected_placeholder": null, "should_redact": false, "category": "false_positive"}
+{"text": "Hello, my email is john.doe@ericsson.com, phone is +1-555-123-4567, and my employee ID is EMP-12345.", "expected_entity": "MULTI", "expected_placeholder": null, "should_redact": true, "category": "multi_entity"}
+{"text": "Sarah Johnson (EMP-67890) can be reached at sarah.j@company.se or 408-555-0199.", "expected_entity": "MULTI", "expected_placeholder": null, "should_redact": true, "category": "multi_entity"}
