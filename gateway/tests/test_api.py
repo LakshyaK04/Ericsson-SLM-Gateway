@@ -31,6 +31,16 @@ class MockBackend(LLMBackend):
     ):
         return "Mock response from backend", 12, 6, "stop"
 
+    async def generate_stream(
+        self,
+        messages,
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        max_tokens: int = 512,
+    ):
+        for token in ["Mock ", "streaming ", "response"]:
+            yield token
+
     async def close(self) -> None:
         self._loaded = False
 
@@ -157,17 +167,39 @@ def test_chat_completions_empty_messages_validation(client):
     assert data["error"]["type"] == "invalid_request_error"
 
 
-def test_chat_completions_streaming_rejected(client):
-    """stream=True must return 400 with a clear message per spec."""
+def test_chat_completions_streaming_success(client):
+    """stream=True returns Server-Sent Events (text/event-stream) with OpenAI chunk format."""
     payload = {
         "messages": [{"role": "user", "content": "hi"}],
         "stream": True,
     }
     resp = client.post("/v1/chat/completions", json=payload)
-    assert resp.status_code == 400
-    data = resp.json()
-    assert "error" in data
-    assert "streaming is not supported" in data["error"]["message"].lower()
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers["content-type"]
+
+    lines = [line.strip() for line in resp.text.split("\n") if line.strip()]
+    assert len(lines) >= 3
+    assert lines[-1] == "data: [DONE]"
+
+    # Parse and validate chunks
+    import json
+    chunks = []
+    for line in lines[:-1]:
+        assert line.startswith("data: ")
+        chunk = json.loads(line[6:])
+        chunks.append(chunk)
+
+    # First chunk contains metadata
+    assert chunks[0]["object"] == "chat.completion.chunk"
+    assert "x_routing" in chunks[0]
+    assert chunks[0]["choices"][0]["delta"]["role"] == "assistant"
+
+    # Accumulated stream content matches backend tokens
+    content = "".join([c["choices"][0]["delta"].get("content") or "" for c in chunks])
+    assert "Mock streaming response" in content
+
+    # Stop chunk
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
 
 
 def test_chat_completions_includes_routing_metadata(client):

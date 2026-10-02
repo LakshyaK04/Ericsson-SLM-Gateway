@@ -58,6 +58,28 @@ class ChatCompletionResponse(BaseModel):
     x_sources: Optional[List[Dict[str, Any]]] = None
 
 
+class ChatCompletionChunkDelta(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str] = None
+
+
+class ChatCompletionChunkChoice(BaseModel):
+    index: int = 0
+    delta: ChatCompletionChunkDelta
+    finish_reason: Optional[str] = None
+
+
+class ChatCompletionChunk(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex[:12]}")
+    object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[ChatCompletionChunkChoice]
+    x_routing: Optional[Dict[str, Any]] = None
+    x_pii: Optional[Dict[str, Any]] = None
+    x_sources: Optional[List[Dict[str, Any]]] = None
+
+
 class ModelCard(BaseModel):
     id: str
     object: Literal["model"] = "model"

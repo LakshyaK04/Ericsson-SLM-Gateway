@@ -31,6 +31,10 @@ class MockBackend:
     async def generate(self, messages, temperature=0.7, top_p=1.0, max_tokens=512):
         return "Mock local model response.", 20, 10, "stop"
 
+    async def generate_stream(self, messages, temperature=0.7, top_p=1.0, max_tokens=512):
+        for token in ["Mock ", "streaming ", "response."]:
+            yield token
+
     async def close(self):
         pass
 

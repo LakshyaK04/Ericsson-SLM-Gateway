@@ -1,12 +1,15 @@
 """SLM Gateway — OpenAI-compatible FastAPI application."""
 
 from contextlib import asynccontextmanager
+import json
 import logging
+import time
 from typing import Optional
+import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .backends import LLMBackend, get_backend
 from .config import settings
@@ -14,6 +17,9 @@ from .pii import PIIRedactionError, PIIRedactor, get_redactor
 from .rag_client import RAGClient
 from .router import IntentRouter, RoutingResult, get_router
 from .schemas import (
+    ChatCompletionChunk,
+    ChatCompletionChunkChoice,
+    ChatCompletionChunkDelta,
     ChatCompletionRequest,
     ChatCompletionResponse,
     Choice,
@@ -246,18 +252,6 @@ async def chat_completions(
     prompts are scrubbed of PII before any model sees them, routes to RAG only when
     document context is required, and formats results in standard OpenAI shape.
     """
-    if request.stream:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": {
-                    "message": "Streaming is not supported in this version. Set stream=false.",
-                    "type": "invalid_request_error",
-                    "code": 400,
-                }
-            },
-        )
-
     if backend is None or not backend.is_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -340,6 +334,63 @@ async def chat_completions(
                     raw_usage = rag_resp.get("usage", {})
 
                     model_name = request.model or "rag-pipeline"
+
+                    if request.stream:
+                        async def stream_rag_chunks():
+                            chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+                            created = int(time.time())
+                            # Initial chunk with metadata
+                            meta_chunk = ChatCompletionChunk(
+                                id=chunk_id,
+                                created=created,
+                                model=model_name,
+                                choices=[
+                                    ChatCompletionChunkChoice(
+                                        index=0,
+                                        delta=ChatCompletionChunkDelta(role="assistant", content=""),
+                                        finish_reason=None,
+                                    )
+                                ],
+                                x_routing=x_routing,
+                                x_pii={"redactions": total_redactions},
+                                x_sources=rag_sources,
+                            )
+                            yield f"data: {meta_chunk.model_dump_json()}\n\n"
+
+                            import re
+                            tokens = re.findall(r"\S+|\s+", rag_content)
+                            for t in tokens:
+                                chunk = ChatCompletionChunk(
+                                    id=chunk_id,
+                                    created=created,
+                                    model=model_name,
+                                    choices=[
+                                        ChatCompletionChunkChoice(
+                                            index=0,
+                                            delta=ChatCompletionChunkDelta(content=t),
+                                            finish_reason=None,
+                                        )
+                                    ],
+                                )
+                                yield f"data: {chunk.model_dump_json()}\n\n"
+
+                            stop_chunk = ChatCompletionChunk(
+                                id=chunk_id,
+                                created=created,
+                                model=model_name,
+                                choices=[
+                                    ChatCompletionChunkChoice(
+                                        index=0,
+                                        delta=ChatCompletionChunkDelta(),
+                                        finish_reason="stop",
+                                    )
+                                ],
+                            )
+                            yield f"data: {stop_chunk.model_dump_json()}\n\n"
+                            yield "data: [DONE]\n\n"
+
+                        return StreamingResponse(stream_rag_chunks(), media_type="text/event-stream")
+
                     return ChatCompletionResponse(
                         model=model_name,
                         choices=[
@@ -358,6 +409,73 @@ async def chat_completions(
                         x_pii={"redactions": total_redactions},
                         x_sources=rag_sources,
                     )
+
+    model_name = request.model or backend.get_model_name()
+
+    if request.stream:
+        async def stream_local_chunks():
+            chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+            created = int(time.time())
+            is_first = True
+            try:
+                async for token_text in backend.generate_stream(
+                    messages=sanitized_messages,
+                    temperature=request.temperature,
+                    top_p=request.top_p,
+                    max_tokens=request.max_tokens,
+                ):
+                    if is_first:
+                        chunk = ChatCompletionChunk(
+                            id=chunk_id,
+                            created=created,
+                            model=model_name,
+                            choices=[
+                                ChatCompletionChunkChoice(
+                                    index=0,
+                                    delta=ChatCompletionChunkDelta(role="assistant", content=token_text),
+                                    finish_reason=None,
+                                )
+                            ],
+                            x_routing=x_routing,
+                            x_pii={"redactions": total_redactions},
+                        )
+                        is_first = False
+                    else:
+                        chunk = ChatCompletionChunk(
+                            id=chunk_id,
+                            created=created,
+                            model=model_name,
+                            choices=[
+                                ChatCompletionChunkChoice(
+                                    index=0,
+                                    delta=ChatCompletionChunkDelta(content=token_text),
+                                    finish_reason=None,
+                                )
+                            ],
+                        )
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+
+                stop_chunk = ChatCompletionChunk(
+                    id=chunk_id,
+                    created=created,
+                    model=model_name,
+                    choices=[
+                        ChatCompletionChunkChoice(
+                            index=0,
+                            delta=ChatCompletionChunkDelta(),
+                            finish_reason="stop",
+                        )
+                    ],
+                )
+                yield f"data: {stop_chunk.model_dump_json()}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                logger.error("Streaming generation failed: %s", str(e), exc_info=True)
+                err_payload = json.dumps({"error": {"message": str(e), "type": "generation_error", "code": 500}})
+                yield f"data: {err_payload}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(stream_local_chunks(), media_type="text/event-stream")
 
     try:
         content, prompt_tokens, completion_tokens, finish_reason = await backend.generate(
@@ -378,8 +496,6 @@ async def chat_completions(
                 }
             },
         )
-
-    model_name = request.model or backend.get_model_name()
 
     return ChatCompletionResponse(
         model=model_name,

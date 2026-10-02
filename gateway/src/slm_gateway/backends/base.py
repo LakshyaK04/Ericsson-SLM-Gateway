@@ -44,6 +44,20 @@ class LLMBackend(ABC):
         pass
 
     @abstractmethod
+    def generate_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        max_tokens: int = 512,
+    ):
+        """Execute streaming chat completion.
+
+        Yields string text chunks as they are generated.
+        """
+        pass
+
+    @abstractmethod
     async def close(self) -> None:
         """Release resources on application shutdown."""
         pass

@@ -2,13 +2,15 @@
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Tuple
+from threading import Thread
+from typing import AsyncIterator, Dict, List, Optional, Tuple
 
 import torch
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
+    TextIteratorStreamer,
 )
 
 from ..config import Settings
@@ -186,6 +188,83 @@ class HFLocalBackend(LLMBackend):
                 top_p,
                 max_tokens,
             )
+
+    async def generate_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        max_tokens: int = 512,
+    ) -> AsyncIterator[str]:
+        """Execute token streaming chat completion protected by single-concurrency GPU lock."""
+        async with self._semaphore:
+            trimmed_messages = self._trim_messages_if_needed(messages, max_tokens)
+            inputs = self.tokenizer.apply_chat_template(
+                trimmed_messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if isinstance(inputs, torch.Tensor):
+                input_ids = inputs.to(self.model.device)
+                attention_mask = None
+            else:
+                input_ids = inputs["input_ids"].to(self.model.device)
+                attention_mask = inputs.get("attention_mask")
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(self.model.device)
+
+            streamer = TextIteratorStreamer(
+                self.tokenizer, skip_prompt=True, skip_special_tokens=True
+            )
+
+            generate_kwargs = {
+                "input_ids": input_ids,
+                "max_new_tokens": max_tokens,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "streamer": streamer,
+            }
+            if attention_mask is not None:
+                generate_kwargs["attention_mask"] = attention_mask
+
+            if temperature <= 0.0:
+                generate_kwargs["do_sample"] = False
+            else:
+                generate_kwargs["do_sample"] = True
+                generate_kwargs["temperature"] = temperature
+                generate_kwargs["top_p"] = top_p
+
+            loop = asyncio.get_running_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def run_generation():
+                try:
+                    with torch.no_grad():
+                        self.model.generate(**generate_kwargs)
+                except Exception as exc:
+                    loop.call_soon_threadsafe(queue.put_nowait, exc)
+
+            def stream_tokens():
+                try:
+                    for text in streamer:
+                        if text:
+                            loop.call_soon_threadsafe(queue.put_nowait, text)
+                except Exception as exc:
+                    loop.call_soon_threadsafe(queue.put_nowait, exc)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+
+            gen_thread = Thread(target=run_generation, daemon=True)
+            stream_thread = Thread(target=stream_tokens, daemon=True)
+            gen_thread.start()
+            stream_thread.start()
+
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
 
     async def close(self) -> None:
         """Unload model and free GPU memory."""
