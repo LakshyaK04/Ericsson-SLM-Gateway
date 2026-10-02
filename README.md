@@ -106,7 +106,20 @@ Features:
 - **PII Sanitizer Lab**: Side-by-side comparison of raw prompts vs redacted model inputs with colored entity pills.
 - **Semantic Intent Radar**: Live visualization of intent similarity scores and threshold fallback.
 - **Hybrid RAG Inspector**: Query search showing dense, BM25, RRF, and cross-encoder scores per chunk.
+- **Document Ingest & Corpus Manager**: Drag-and-drop document upload with multi-strategy chunk indexing and real-time inventory management.
 - **Prometheus Scrape Viewer**: Inspect `/metrics` directly from the UI.
+
+### Run the Benchmarks & Scorecard
+```bash
+# View the unified benchmark scorecard dashboard:
+uv run python scripts/run_benchmarks.py --scorecard-only
+
+# Or execute specific benchmark pipelines:
+uv run python scripts/run_benchmarks.py --suite pii       # PII recall & false positives
+uv run python scripts/run_benchmarks.py --suite router    # Intent classification & threshold sweep
+uv run python scripts/run_benchmarks.py --suite chunking  # Multi-strategy chunking & re-ranking
+uv run python scripts/run_benchmarks.py --suite hybrid    # BM25 + BGE dense RRF benchmark
+```
 
 ### Run the Demo
 ```bash
