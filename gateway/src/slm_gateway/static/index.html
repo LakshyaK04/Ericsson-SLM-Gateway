@@ -504,6 +504,7 @@
       <button class="tab-btn" onclick="switchTab('pii')">🛡️ PII Sanitizer Lab</button>
       <button class="tab-btn" onclick="switchTab('router')">🧭 Semantic Intent Radar</button>
       <button class="tab-btn" onclick="switchTab('rag')">📚 Hybrid RAG & RRF</button>
+      <button class="tab-btn" onclick="switchTab('ingest')">📄 Document Ingest</button>
       <button class="tab-btn" onclick="switchTab('telemetry')">📊 Prometheus Telemetry</button>
     </div>
 
@@ -664,7 +665,58 @@
       </div>
     </div>
 
-    <!-- TAB 5: TELEMETRY -->
+    <!-- TAB 5: DOCUMENT INGESTION -->
+    <div id="panel-ingest" class="panel two-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Upload & Index Document</div>
+          <span class="badge badge-bm25">ChromaDB + Multi-Strategy</span>
+        </div>
+        
+        <div id="drop-zone" onclick="document.getElementById('ingest-file-input').click()" style="border: 2px dashed var(--border-accent); border-radius: 8px; padding: 2rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s ease; background: rgba(0,229,255,0.03);">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">📂</div>
+          <div style="font-weight: 500; color: var(--text-main);">Drag & Drop Document or Click to Browse</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Supported: .pdf, .docx (Max 50MB)</div>
+          <input type="file" id="ingest-file-input" style="display: none;" accept=".pdf,.docx" onchange="handleFileSelected(event)">
+        </div>
+
+        <div id="selected-file-info" style="margin-top: 1rem; font-size: 0.85rem; color: var(--cyan); display: none;"></div>
+
+        <div style="margin-top: 1.25rem;">
+          <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Select Chunking Strategies to Index:</label>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+              <input type="checkbox" id="strat-structure" checked> Structure (Headings & Lists)
+            </label>
+            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+              <input type="checkbox" id="strat-semantic" checked> Semantic (Embedding Drops)
+            </label>
+            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+              <input type="checkbox" id="strat-character" checked> Character (Sliding Window)
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem;">
+          <button id="ingest-submit-btn" class="btn-action" style="width: 100%;" onclick="submitDocumentIngest()">
+            <span>⚡ Ingest & Build Vector + BM25 Indices</span>
+          </button>
+        </div>
+        <div id="ingest-status-msg" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Indexed Corpus & Document Inventory</div>
+          <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="loadIndexedDocuments()">🔄 Refresh</button>
+        </div>
+        <div id="corpus-list-container" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 440px; overflow-y: auto;">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">Loading indexed corpus...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: TELEMETRY -->
     <div id="panel-telemetry" class="panel">
       <div class="card">
         <div class="card-header">
@@ -689,6 +741,8 @@
 
       if (tabId === 'telemetry') {
         refreshMetrics();
+      } else if (tabId === 'ingest') {
+        loadIndexedDocuments();
       }
     }
 
@@ -953,7 +1007,192 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    // Default presets on load
+    // Tab 5: Document Ingestion & Corpus Management
+    let selectedIngestFile = null;
+
+    function initDropZone() {
+      const dropZone = document.getElementById('drop-zone');
+      if (!dropZone) return;
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.style.borderColor = 'var(--cyan)';
+          dropZone.style.background = 'rgba(0, 229, 255, 0.08)';
+        }, false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.style.borderColor = 'var(--border-accent)';
+          dropZone.style.background = 'rgba(0, 229, 255, 0.03)';
+        }, false);
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+          setIngestFile(files[0]);
+        }
+      }, false);
+    }
+
+    function handleFileSelected(event) {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        setIngestFile(files[0]);
+      }
+    }
+
+    function setIngestFile(file) {
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!['.pdf', '.docx'].includes(ext)) {
+        alert('Unsupported file format. Please upload a .pdf or .docx document.');
+        return;
+      }
+      selectedIngestFile = file;
+      const infoBox = document.getElementById('selected-file-info');
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      infoBox.style.display = 'block';
+      infoBox.innerHTML = `<strong>Selected:</strong> ${escapeHtml(file.name)} (${sizeMb} MB)`;
+      document.getElementById('ingest-status-msg').innerHTML = '';
+    }
+
+    async function submitDocumentIngest() {
+      const statusMsg = document.getElementById('ingest-status-msg');
+      const submitBtn = document.getElementById('ingest-submit-btn');
+
+      if (!selectedIngestFile) {
+        statusMsg.innerHTML = '<span style="color: #ef4444;">Please select or drop a file first.</span>';
+        return;
+      }
+
+      const strategies = [];
+      if (document.getElementById('strat-structure').checked) strategies.push('structure');
+      if (document.getElementById('strat-semantic').checked) strategies.push('semantic');
+      if (document.getElementById('strat-character').checked) strategies.push('character');
+
+      if (strategies.length === 0) {
+        statusMsg.innerHTML = '<span style="color: #ef4444;">Please select at least one chunking strategy.</span>';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>⏳ Parsing, Chunking & Embedding...</span>';
+      statusMsg.innerHTML = '<span style="color: var(--cyan);">Uploading document to RAG service (port 8001)...</span>';
+
+      const formData = new FormData();
+      formData.append('file', selectedIngestFile);
+      formData.append('strategies', strategies.join(','));
+
+      try {
+        const resp = await fetch('http://localhost:8001/documents', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+          statusMsg.innerHTML = `<span style="color: #ef4444;">Upload failed: ${escapeHtml(errData.detail || resp.statusText)}</span>`;
+          return;
+        }
+
+        const data = await resp.json();
+        const countsStr = Object.entries(data.chunk_counts || {})
+          .map(([strat, count]) => `<code>${strat}: ${count}</code>`)
+          .join(', ');
+
+        statusMsg.innerHTML = `
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; padding: 0.75rem; color: #6ee7b7; margin-top: 0.5rem;">
+            <strong>✓ Successfully Indexed!</strong><br>
+            Doc ID: <code>${escapeHtml(data.doc_id)}</code><br>
+            Total Chunks: <strong>${data.total_chunks}</strong> (${countsStr})
+          </div>
+        `;
+
+        selectedIngestFile = null;
+        document.getElementById('ingest-file-input').value = '';
+        document.getElementById('selected-file-info').style.display = 'none';
+
+        loadIndexedDocuments();
+      } catch (err) {
+        statusMsg.innerHTML = `<span style="color: #ef4444;">Connection error (Ensure RAG service is running on :8001): ${escapeHtml(err.message)}</span>`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>⚡ Ingest & Build Vector + BM25 Indices</span>';
+      }
+    }
+
+    async function loadIndexedDocuments() {
+      const container = document.getElementById('corpus-list-container');
+      container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">Fetching indexed corpus...</div>';
+
+      try {
+        const resp = await fetch('http://localhost:8001/documents');
+        if (!resp.ok) {
+          container.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem;">Failed to fetch documents (HTTP ${resp.status}). Ensure RAG service is running on port 8001.</div>`;
+          return;
+        }
+
+        const data = await resp.json();
+        const docs = data.documents || [];
+
+        if (docs.length === 0) {
+          container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No documents currently indexed in ChromaDB. Ingest a document above!</div>';
+          return;
+        }
+
+        container.innerHTML = docs.map(doc => {
+          const stratBadges = (doc.strategies || []).map(s => `<span class="badge badge-dense">${s}</span>`).join(' ');
+          return `
+            <div class="source-card" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: var(--text-main); font-size: 0.9rem; margin-bottom: 0.25rem;">
+                  📄 ${escapeHtml(doc.source)}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem;">
+                  ID: <code>${escapeHtml(doc.doc_id)}</code> • Total Chunks: <strong style="color: var(--cyan);">${doc.total_chunks}</strong>
+                </div>
+                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                  ${stratBadges}
+                </div>
+              </div>
+              <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5;" onclick="deleteDocument('${escapeHtml(doc.doc_id)}')">
+                🗑️ Delete
+              </button>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem;">Error connecting to RAG service: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function deleteDocument(docId) {
+      if (!confirm(`Are you sure you want to delete document ${docId} and all its indexed chunks?`)) return;
+
+      try {
+        const resp = await fetch(`http://localhost:8001/documents/${encodeURIComponent(docId)}`, {
+          method: 'DELETE'
+        });
+
+        if (!resp.ok) {
+          alert(`Failed to delete document: HTTP ${resp.status}`);
+          return;
+        }
+
+        loadIndexedDocuments();
+      } catch (err) {
+        alert(`Error deleting document: ${err.message}`);
+      }
+    }
+
+    // Default presets & initialization on load
+    initDropZone();
     setChatPrompt('Explain how the Raft consensus algorithm handles leader election.');
   </script>
 </body>
