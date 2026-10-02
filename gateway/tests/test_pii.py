@@ -35,6 +35,17 @@ class RecordingMockBackend(LLMBackend):
         self.received_messages = list(messages)
         return "Sanitized response", 10, 5, "stop"
 
+    async def generate_stream(
+        self,
+        messages,
+        temperature: float = 0.7,
+        top_p: float = 1.0,
+        max_tokens: int = 512,
+    ):
+        self.received_messages = list(messages)
+        for token in ["Sanitized ", "response"]:
+            yield token
+
     async def close(self) -> None:
         pass
 
