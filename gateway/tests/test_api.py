@@ -286,5 +286,19 @@ def test_prometheus_metrics_endpoint(client):
     assert "gateway_request_duration_seconds" in text
 
 
+def test_playground_endpoint(client):
+    """GET / and GET /playground return HTML playground UI."""
+    resp1 = client.get("/")
+    assert resp1.status_code == 200
+    assert "text/html" in resp1.headers["content-type"]
+    assert "Ericsson" in resp1.text
+    assert "Playground" in resp1.text
+
+    resp2 = client.get("/playground")
+    assert resp2.status_code == 200
+    assert "text/html" in resp2.headers["content-type"]
+
+
+
 
 

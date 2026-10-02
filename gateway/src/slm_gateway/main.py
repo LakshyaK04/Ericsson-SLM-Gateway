@@ -3,13 +3,14 @@
 from contextlib import asynccontextmanager
 import json
 import logging
+from pathlib import Path
 import time
 from typing import Optional
 import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from .backends import LLMBackend, get_backend
 from .config import settings
@@ -142,9 +143,22 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+STATIC_DIR = Path(__file__).parent / "static"
+
+
 # ============================================================
-# Health & Status Routes
+# Playground UI & Health Routes
 # ============================================================
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/playground", response_class=HTMLResponse)
+async def playground():
+    """Interactive GenAI Stack Web Playground."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Playground template not found</h1>", status_code=404)
+
 
 @app.get("/health")
 async def health():

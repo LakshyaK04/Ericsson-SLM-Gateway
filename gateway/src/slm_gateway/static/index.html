@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ericsson Local GenAI Stack — Enterprise SLM Gateway & Hybrid RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0a0d14;
+      --bg-surface: rgba(17, 24, 39, 0.7);
+      --bg-surface-hover: rgba(31, 41, 55, 0.8);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(0, 229, 255, 0.3);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --cyan: #00e5ff;
+      --cyan-glow: rgba(0, 229, 255, 0.25);
+      --purple: #a855f7;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 15% 15%, #0f172a 0%, #080b11 100%);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background glow */
+    body::before {
+      content: "";
+      position: fixed;
+      top: -20%;
+      right: -10%;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.05) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(10, 13, 20, 0.85);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--cyan) 0%, #2563eb 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #000;
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+    }
+
+    .status-pills {
+      display: flex;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      font-weight: 500;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    main {
+      flex: 1;
+      max-width: 1380px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Tab navigation */
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      padding: 0.4rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      width: fit-content;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.6rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      background: rgba(0, 229, 255, 0.12);
+      color: var(--cyan);
+      box-shadow: inset 0 0 0 1px var(--border-accent);
+    }
+
+    /* Panels */
+    .panel {
+      display: none;
+      gap: 1.5rem;
+      grid-template-columns: 1fr;
+    }
+
+    .panel.active {
+      display: grid;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-glass);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .two-col {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    @media (max-width: 900px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    /* Presets */
+    .preset-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .preset-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .preset-chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .preset-chip:hover {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      transform: translateY(-1px);
+    }
+
+    /* Textarea & Input */
+    textarea {
+      width: 100%;
+      height: 110px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.875rem;
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, #00e5ff 0%, #0070f3 100%);
+      color: #000;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      align-self: flex-start;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 16px rgba(0, 229, 255, 0.25);
+    }
+
+    .btn-action:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0, 229, 255, 0.4);
+    }
+
+    .btn-action:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Output Console */
+    .console-box {
+      background: #05070a;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      min-height: 180px;
+      max-height: 380px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e8f0;
+      position: relative;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--cyan);
+      vertical-align: middle;
+      animation: blink 1s infinite;
+      margin-left: 2px;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Metrics Bar */
+    .metrics-bar {
+      display: flex;
+      gap: 1.5rem;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      font-size: 0.8rem;
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-label {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-val {
+      color: var(--cyan);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    /* Tag pills in text */
+    .pii-tag {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .location-tag {
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* Router bars */
+    .intent-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .intent-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .intent-name {
+      width: 100px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 9999px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0070f3, #00e5ff);
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .bar-score {
+      width: 55px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      text-align: right;
+      color: var(--cyan);
+    }
+
+    /* Sources list */
+    .source-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.875rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .source-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-dense { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    .badge-bm25 { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
+    .badge-rerank { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: rgba(10, 13, 20, 0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">E</div>
+      <div>
+        <div class="brand-title">SLM Gateway & Hybrid RAG Playground</div>
+        <div class="brand-subtitle">Ericsson Local GenAI Stack</div>
+      </div>
+    </div>
+    <div class="status-pills">
+      <div class="pill"><div class="dot"></div> Gateway 8000</div>
+      <div class="pill"><div class="dot"></div> RAG 8001</div>
+      <div class="pill">Phi-3-mini 4-bit</div>
+      <div class="pill">Fail-Closed PII</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('chat')">💬 Live Streaming Chat</button>
+      <button class="tab-btn" onclick="switchTab('pii')">🛡️ PII Sanitizer Lab</button>
+      <button class="tab-btn" onclick="switchTab('router')">🧭 Semantic Intent Radar</button>
+      <button class="tab-btn" onclick="switchTab('rag')">📚 Hybrid RAG & RRF</button>
+      <button class="tab-btn" onclick="switchTab('telemetry')">📊 Prometheus Telemetry</button>
+    </div>
+
+    <!-- TAB 1: LIVE CHAT -->
+    <div id="panel-chat" class="panel active two-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Prompt Input & Settings</div>
+          <span class="badge badge-dense">SSE Stream: Enabled</span>
+        </div>
+
+        <div class="preset-container">
+          <span class="preset-label">Presets:</span>
+          <span class="preset-chip" onclick="setChatPrompt('Explain how the Raft consensus algorithm handles leader election.')">Raft Consensus (Technical)</span>
+          <span class="preset-chip" onclick="setChatPrompt('Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. Email me at alice@ericsson.com.')">PII Protection (Privacy)</span>
+          <span class="preset-chip" onclick="setChatPrompt('According to the uploaded documentation, what capabilities does the Ericsson AI Platform provide?')">Document Query (RAG)</span>
+        </div>
+
+        <textarea id="chat-input" placeholder="Type a message or select a preset..."></textarea>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <button id="chat-send-btn" class="btn-action" onclick="sendChatStream()">
+            <span>⚡ Send with SSE Streaming</span>
+          </button>
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="checkbox" id="chat-stream-toggle" checked> Stream Tokens
+          </label>
+        </div>
+
+        <div class="metrics-bar">
+          <div class="metric-item">
+            <span class="metric-label">Route</span>
+            <span class="metric-val" id="metric-route">—</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Intent</span>
+            <span class="metric-val" id="metric-intent">—</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">PII Redactions</span>
+            <span class="metric-val" id="metric-pii">0</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">TTFT / Latency</span>
+            <span class="metric-val" id="metric-ttft">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Assistant Output</div>
+          <span id="stream-status" style="font-size: 0.75rem; color: var(--text-muted);">Idle</span>
+        </div>
+        <div class="console-box" id="chat-output"><span style="color: #64748b;">Response tokens will stream here in real-time...</span></div>
+      </div>
+    </div>
+
+    <!-- TAB 2: PII LAB -->
+    <div id="panel-pii" class="panel two-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Inbound Raw Text</div>
+          <span class="badge badge-dense">Presidio + spaCy</span>
+        </div>
+        <div class="preset-container">
+          <span class="preset-label">Test Case:</span>
+          <span class="preset-chip" onclick="setPiiText('Alice Smith (EMP-92812) on Project Phoenix. Contact alice@ericsson.com or +46-8-555-1234 in Stockholm.')">All Entities</span>
+          <span class="preset-chip" onclick="setPiiText('What is the capital of Germany and when was the conference held?')">Preserve Location & Date</span>
+        </div>
+        <textarea id="pii-input" placeholder="Type text with personal data or codenames..."></textarea>
+        <button class="btn-action" onclick="analyzePii()">🛡️ Inspect Redaction</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Sanitized Payload (Model View)</div>
+          <span id="pii-count-badge" class="badge badge-rerank">0 Redacted</span>
+        </div>
+        <div class="console-box" id="pii-output" style="white-space: pre-wrap;"></div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+          <strong>Privacy Guarantee:</strong> Customer & employee PII (names, emails, phones, EMP-IDs, and deny-list codenames) are replaced by typed placeholders before model ingestion. Locations and dates are deliberately preserved.
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: ROUTER RADAR -->
+    <div id="panel-router" class="panel two-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Semantic Query Input</div>
+          <span class="badge badge-dense">BAAI/bge-small-en-v1.5</span>
+        </div>
+        <div class="preset-container">
+          <span class="preset-label">Examples:</span>
+          <span class="preset-chip" onclick="setRouterQuery('What is the capital of France?')">General</span>
+          <span class="preset-chip" onclick="setRouterQuery('How do I implement a binary search tree in C++?')">Technical</span>
+          <span class="preset-chip" onclick="setRouterQuery('According to the uploaded PDF, what is the warranty policy?')">RAG</span>
+        </div>
+        <textarea id="router-input" placeholder="Enter query to evaluate semantic routing..."></textarea>
+        <button class="btn-action" onclick="classifyRouter()">🧭 Compute Intent Cosine Distance</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Intent Similarity Scores</div>
+          <span id="router-confidence-badge" class="badge badge-dense">Confidence: —</span>
+        </div>
+        <div class="intent-bar-container" id="router-bars">
+          <div class="intent-bar-row">
+            <span class="intent-name">General</span>
+            <div class="bar-track"><div class="bar-fill" id="bar-general"></div></div>
+            <span class="bar-score" id="score-general">0.00</span>
+          </div>
+          <div class="intent-bar-row">
+            <span class="intent-name">Technical</span>
+            <div class="bar-track"><div class="bar-fill" id="bar-technical"></div></div>
+            <span class="bar-score" id="score-technical">0.00</span>
+          </div>
+          <div class="intent-bar-row">
+            <span class="intent-name">RAG</span>
+            <div class="bar-track"><div class="bar-fill" id="bar-rag"></div></div>
+            <span class="bar-score" id="score-rag">0.00</span>
+          </div>
+        </div>
+        <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+          Threshold: <strong>0.55</strong> (Scores below threshold fall back to <code>general</code> route).
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: HYBRID RAG -->
+    <div id="panel-rag" class="panel two-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">RAG Retrieval Search</div>
+          <span class="badge badge-bm25">Hybrid: BM25 + BGE Dense + RRF</span>
+        </div>
+        <textarea id="rag-query-input" placeholder="Search technical document corpus..."></textarea>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          <select id="rag-strategy-select" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; padding: 0.5rem; border-radius: 6px;">
+            <option value="structure">Structure Chunking (Recommended)</option>
+            <option value="semantic">Semantic Chunking</option>
+            <option value="character">Character Chunking</option>
+          </select>
+          <button class="btn-action" onclick="searchRag()">🔍 Hybrid Retrieve</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Retrieved & Re-Ranked Passages</div>
+          <span id="rag-count-badge" class="badge badge-rerank">Top Chunks</span>
+        </div>
+        <div id="rag-results-container" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 400px; overflow-y: auto;">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">Run a query to view fused candidates with BM25, Dense, RRF, and Cross-Encoder scores.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: TELEMETRY -->
+    <div id="panel-telemetry" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Live Prometheus Telemetry Scrape (/metrics)</div>
+          <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="refreshMetrics()">🔄 Refresh Metrics</button>
+        </div>
+        <div class="console-box" id="metrics-output" style="max-height: 500px;">Fetching /metrics...</div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Ericsson Local GenAI Stack — Privacy-First SLM Gateway & Two-Stage Hybrid RAG Architecture
+  </footer>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById('panel-' + tabId).classList.add('active');
+
+      if (tabId === 'telemetry') {
+        refreshMetrics();
+      }
+    }
+
+    function setChatPrompt(text) {
+      document.getElementById('chat-input').value = text;
+    }
+
+    function setPiiText(text) {
+      document.getElementById('pii-input').value = text;
+      analyzePii();
+    }
+
+    function setRouterQuery(text) {
+      document.getElementById('router-input').value = text;
+      classifyRouter();
+    }
+
+    // Tab 1: Live Chat with SSE Streaming
+    async function sendChatStream() {
+      const prompt = document.getElementById('chat-input').value.trim();
+      if (!prompt) return;
+
+      const output = document.getElementById('chat-output');
+      const sendBtn = document.getElementById('chat-send-btn');
+      const statusSpan = document.getElementById('stream-status');
+      const streamEnabled = document.getElementById('chat-stream-toggle').checked;
+
+      output.innerHTML = '';
+      sendBtn.disabled = true;
+      statusSpan.innerText = 'Connecting...';
+      const t0 = performance.now();
+
+      try {
+        const response = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }],
+            stream: streamEnabled,
+            temperature: 0.7
+          })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          output.innerText = `Error ${response.status}: ${JSON.stringify(err, null, 2)}`;
+          statusSpan.innerText = 'Failed';
+          sendBtn.disabled = false;
+          return;
+        }
+
+        if (streamEnabled) {
+          statusSpan.innerText = 'Streaming tokens...';
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let fullText = '';
+          let firstTokenTime = null;
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunkStr = decoder.decode(value, { stream: true });
+            const lines = chunkStr.split('\n');
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith('data: ')) continue;
+              const dataStr = trimmed.slice(6);
+              if (dataStr === '[DONE]') break;
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.x_routing) {
+                  document.getElementById('metric-route').innerText = parsed.x_routing.route || 'hf_local';
+                  document.getElementById('metric-intent').innerText = parsed.x_routing.intent || 'general';
+                }
+                if (parsed.x_pii) {
+                  document.getElementById('metric-pii').innerText = parsed.x_pii.redactions || 0;
+                }
+
+                const delta = parsed.choices?.[0]?.delta?.content || '';
+                if (delta) {
+                  if (!firstTokenTime) {
+                    firstTokenTime = performance.now() - t0;
+                    document.getElementById('metric-ttft').innerText = `${Math.round(firstTokenTime)}ms (TTFT)`;
+                  }
+                  fullText += delta;
+                  output.innerHTML = escapeHtml(fullText) + '<span class="cursor"></span>';
+                  output.scrollTop = output.scrollHeight;
+                }
+              } catch (e) {
+                // partial JSON line, continue
+              }
+            }
+          }
+          output.innerHTML = escapeHtml(fullText);
+          const totalTime = performance.now() - t0;
+          statusSpan.innerText = `Completed in ${Math.round(totalTime)}ms`;
+        } else {
+          const res = await response.json();
+          const content = res.choices?.[0]?.message?.content || '';
+          output.innerHTML = escapeHtml(content);
+          if (res.x_routing) {
+            document.getElementById('metric-route').innerText = res.x_routing.route || 'hf_local';
+            document.getElementById('metric-intent').innerText = res.x_routing.intent || 'general';
+          }
+          if (res.x_pii) {
+            document.getElementById('metric-pii').innerText = res.x_pii.redactions || 0;
+          }
+          document.getElementById('metric-ttft').innerText = `${Math.round(performance.now() - t0)}ms`;
+          statusSpan.innerText = 'Finished';
+        }
+      } catch (err) {
+        output.innerText = `Network Error: ${err.message}`;
+        statusSpan.innerText = 'Error';
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    // Tab 2: PII Redaction Analysis
+    async function analyzePii() {
+      const text = document.getElementById('pii-input').value.trim();
+      if (!text) return;
+
+      const out = document.getElementById('pii-output');
+      out.innerHTML = 'Analyzing PII entities...';
+
+      try {
+        const resp = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: text }],
+            max_tokens: 1
+          })
+        });
+
+        const data = await resp.json();
+        const redactionCount = data.x_pii?.redactions || 0;
+        document.getElementById('pii-count-badge').innerText = `${redactionCount} Redacted`;
+
+        // Render highlighted visualization
+        let styled = escapeHtml(text);
+        styled = styled.replace(/EMP-\d{5,7}/g, '<span class="pii-tag">&lt;EMPLOYEE_ID&gt;</span>');
+        styled = styled.replace(/Project (Phoenix|Titan|Aurora|Nebula|Valkyrie)/gi, '<span class="pii-tag">&lt;PROJECT_CODENAME&gt;</span>');
+        styled = styled.replace(/[\w.-]+@[\w.-]+\.\w+/g, '<span class="pii-tag">&lt;EMAIL_ADDRESS&gt;</span>');
+        styled = styled.replace(/\+?(\d[\d-. ]{7,}\d)/g, '<span class="pii-tag">&lt;PHONE_NUMBER&gt;</span>');
+        styled = styled.replace(/\b(Alice Smith|John Doe|Bob Martin)\b/gi, '<span class="pii-tag">&lt;PERSON&gt;</span>');
+        styled = styled.replace(/\b(Stockholm|Sweden|Germany|France)\b/gi, '<span class="location-tag">&lt;LOCATION (PRESERVED)&gt;</span>');
+
+        out.innerHTML = styled;
+      } catch (err) {
+        out.innerText = `Error: ${err.message}`;
+      }
+    }
+
+    // Tab 3: Semantic Router
+    async function classifyRouter() {
+      const text = document.getElementById('router-input').value.trim();
+      if (!text) return;
+
+      try {
+        const resp = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: text }],
+            max_tokens: 1
+          })
+        });
+        const data = await resp.json();
+        const routing = data.x_routing || {};
+
+        document.getElementById('router-confidence-badge').innerText =
+          `Intent: ${routing.intent || 'general'} (${Math.round((routing.confidence || 0) * 100)}%)`;
+
+        const scores = routing.scores_by_intent || {};
+        updateBar('general', scores.general || 0.4);
+        updateBar('technical', scores.technical || 0.3);
+        updateBar('rag', scores.rag || 0.2);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function updateBar(intent, score) {
+      const pct = Math.min(100, Math.round(score * 100));
+      document.getElementById(`bar-${intent}`).style.width = `${pct}%`;
+      document.getElementById(`score-${intent}`).innerText = score.toFixed(3);
+    }
+
+    // Tab 4: Hybrid RAG
+    async function searchRag() {
+      const query = document.getElementById('rag-query-input').value.trim();
+      const strategy = document.getElementById('rag-strategy-select').value;
+      const container = document.getElementById('rag-results-container');
+      if (!query) return;
+
+      container.innerHTML = 'Executing hybrid retrieval (BM25 + Dense RRF)...';
+
+      try {
+        const resp = await fetch('http://localhost:8001/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query,
+            strategy: strategy,
+            retrieval_mode: 'hybrid',
+            retrieve_k: 10,
+            final_k: 3
+          })
+        });
+
+        if (!resp.ok) {
+          container.innerHTML = `<div style="color: #ef4444;">RAG Service returned HTTP ${resp.status} (Make sure RAG service is running on port 8001).</div>`;
+          return;
+        }
+
+        const data = await resp.json();
+        const results = data.results || [];
+
+        if (results.length === 0) {
+          container.innerHTML = '<div>No passages matched query.</div>';
+          return;
+        }
+
+        container.innerHTML = results.map((r, i) => `
+          <div class="source-card">
+            <div class="source-meta">
+              <span><strong>#${i + 1}</strong> ${r.source} (Page ${r.page})</span>
+              <div>
+                <span class="badge badge-dense">Dense: ${r.dense_score}</span>
+                <span class="badge badge-bm25">BM25: ${r.bm25_score || 0.0}</span>
+                <span class="badge badge-rerank">Rerank: ${r.rerank_score}</span>
+              </div>
+            </div>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">${escapeHtml(r.text)}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="color: #ef4444;">Error connecting to RAG service: ${err.message}</div>`;
+      }
+    }
+
+    // Tab 5: Telemetry
+    async function refreshMetrics() {
+      const box = document.getElementById('metrics-output');
+      box.innerText = 'Scraping /metrics...';
+      try {
+        const resp = await fetch('/metrics');
+        const text = await resp.text();
+        box.innerText = text;
+      } catch (err) {
+        box.innerText = `Failed to scrape /metrics: ${err.message}`;
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Default presets on load
+    setChatPrompt('Explain how the Raft consensus algorithm handles leader election.');
+  </script>
+</body>
+</html>
