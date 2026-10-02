@@ -9,7 +9,7 @@ import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .backends import LLMBackend, get_backend
 from .config import settings
@@ -29,6 +29,7 @@ from .schemas import (
     OpenAIErrorResponse,
     Usage,
 )
+from .telemetry import telemetry
 
 # Configure logging per rule 7: use logging, not print
 logging.basicConfig(
@@ -192,6 +193,15 @@ async def ready():
     )
 
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus telemetry scrape endpoint returning OpenMetrics plain-text."""
+    return Response(
+        content=telemetry.export_prometheus_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
 # ============================================================
 # OpenAI-Compatible API Routes
 # ============================================================
@@ -263,6 +273,9 @@ async def chat_completions(
                 }
             },
         )
+
+    t0 = time.perf_counter()
+    telemetry.inc_active_requests()
 
     # 1. Redact PII from user messages
     total_redactions = 0
@@ -339,57 +352,70 @@ async def chat_completions(
                         async def stream_rag_chunks():
                             chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
                             created = int(time.time())
-                            # Initial chunk with metadata
-                            meta_chunk = ChatCompletionChunk(
-                                id=chunk_id,
-                                created=created,
-                                model=model_name,
-                                choices=[
-                                    ChatCompletionChunkChoice(
-                                        index=0,
-                                        delta=ChatCompletionChunkDelta(role="assistant", content=""),
-                                        finish_reason=None,
-                                    )
-                                ],
-                                x_routing=x_routing,
-                                x_pii={"redactions": total_redactions},
-                                x_sources=rag_sources,
-                            )
-                            yield f"data: {meta_chunk.model_dump_json()}\n\n"
-
-                            import re
-                            tokens = re.findall(r"\S+|\s+", rag_content)
-                            for t in tokens:
-                                chunk = ChatCompletionChunk(
+                            try:
+                                # Initial chunk with metadata
+                                meta_chunk = ChatCompletionChunk(
                                     id=chunk_id,
                                     created=created,
                                     model=model_name,
                                     choices=[
                                         ChatCompletionChunkChoice(
                                             index=0,
-                                            delta=ChatCompletionChunkDelta(content=t),
+                                            delta=ChatCompletionChunkDelta(role="assistant", content=""),
                                             finish_reason=None,
                                         )
                                     ],
+                                    x_routing=x_routing,
+                                    x_pii={"redactions": total_redactions},
+                                    x_sources=rag_sources,
                                 )
-                                yield f"data: {chunk.model_dump_json()}\n\n"
+                                yield f"data: {meta_chunk.model_dump_json()}\n\n"
 
-                            stop_chunk = ChatCompletionChunk(
-                                id=chunk_id,
-                                created=created,
-                                model=model_name,
-                                choices=[
-                                    ChatCompletionChunkChoice(
-                                        index=0,
-                                        delta=ChatCompletionChunkDelta(),
-                                        finish_reason="stop",
+                                import re
+                                tokens = re.findall(r"\S+|\s+", rag_content)
+                                for t in tokens:
+                                    chunk = ChatCompletionChunk(
+                                        id=chunk_id,
+                                        created=created,
+                                        model=model_name,
+                                        choices=[
+                                            ChatCompletionChunkChoice(
+                                                index=0,
+                                                delta=ChatCompletionChunkDelta(content=t),
+                                                finish_reason=None,
+                                            )
+                                        ],
                                     )
-                                ],
-                            )
-                            yield f"data: {stop_chunk.model_dump_json()}\n\n"
-                            yield "data: [DONE]\n\n"
+                                    yield f"data: {chunk.model_dump_json()}\n\n"
+
+                                stop_chunk = ChatCompletionChunk(
+                                    id=chunk_id,
+                                    created=created,
+                                    model=model_name,
+                                    choices=[
+                                        ChatCompletionChunkChoice(
+                                            index=0,
+                                            delta=ChatCompletionChunkDelta(),
+                                            finish_reason="stop",
+                                        )
+                                    ],
+                                )
+                                yield f"data: {stop_chunk.model_dump_json()}\n\n"
+                                yield "data: [DONE]\n\n"
+                            finally:
+                                telemetry.dec_active_requests()
+                                telemetry.record_pii_redactions(total_redactions)
+                                telemetry.record_request("rag", 200, time.perf_counter() - t0)
 
                         return StreamingResponse(stream_rag_chunks(), media_type="text/event-stream")
+
+                    telemetry.dec_active_requests()
+                    telemetry.record_pii_redactions(total_redactions)
+                    telemetry.record_tokens(
+                        raw_usage.get("prompt_tokens", 0),
+                        raw_usage.get("completion_tokens", 0),
+                    )
+                    telemetry.record_request("rag", 200, time.perf_counter() - t0)
 
                     return ChatCompletionResponse(
                         model=model_name,
@@ -474,6 +500,14 @@ async def chat_completions(
                 err_payload = json.dumps({"error": {"message": str(e), "type": "generation_error", "code": 500}})
                 yield f"data: {err_payload}\n\n"
                 yield "data: [DONE]\n\n"
+            finally:
+                telemetry.dec_active_requests()
+                telemetry.record_pii_redactions(total_redactions)
+                telemetry.record_request(
+                    x_routing.get("intent", "general") if x_routing else "general",
+                    200,
+                    time.perf_counter() - t0,
+                )
 
         return StreamingResponse(stream_local_chunks(), media_type="text/event-stream")
 
@@ -486,6 +520,12 @@ async def chat_completions(
         )
     except Exception as e:
         logger.error("Generation failed: %s", str(e), exc_info=True)
+        telemetry.dec_active_requests()
+        telemetry.record_request(
+            x_routing.get("intent", "general") if x_routing else "general",
+            500,
+            time.perf_counter() - t0,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -496,6 +536,15 @@ async def chat_completions(
                 }
             },
         )
+
+    telemetry.dec_active_requests()
+    telemetry.record_pii_redactions(total_redactions)
+    telemetry.record_tokens(prompt_tokens, completion_tokens)
+    telemetry.record_request(
+        x_routing.get("intent", "general") if x_routing else "general",
+        200,
+        time.perf_counter() - t0,
+    )
 
     return ChatCompletionResponse(
         model=model_name,

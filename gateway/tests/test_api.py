@@ -269,4 +269,22 @@ def test_gateway_api_key_enforcement(client, monkeypatch):
     assert resp_no_auth.status_code == 401
 
 
+def test_prometheus_metrics_endpoint(client):
+    """GET /metrics returns valid OpenMetrics Prometheus text format."""
+    # Send a request to generate metrics
+    payload = {"messages": [{"role": "user", "content": "What is Python?"}]}
+    client.post("/v1/chat/completions", json=payload)
+
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    text = resp.text
+
+    assert "gateway_active_requests" in text
+    assert "gateway_requests_total" in text
+    assert "gateway_tokens_total" in text
+    assert "gateway_request_duration_seconds" in text
+
+
+
 
