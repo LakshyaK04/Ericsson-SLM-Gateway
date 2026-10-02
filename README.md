@@ -88,6 +88,19 @@ uv run uvicorn rag_service.main:app --host 0.0.0.0 --port 8001
 uv run uvicorn slm_gateway.main:app --host 0.0.0.0 --port 8000
 ```
 
+### Interactive Web Playground
+When the Gateway is running on port 8000, visit the interactive Web Playground directly in your browser:
+```text
+http://localhost:8000/
+http://localhost:8000/playground
+```
+Features:
+- **Live SSE Token Streaming**: Real-time typewriter effect with TTFT and token/sec latency metrics.
+- **PII Sanitizer Lab**: Side-by-side comparison of raw prompts vs redacted model inputs with colored entity pills.
+- **Semantic Intent Radar**: Live visualization of intent similarity scores and threshold fallback.
+- **Hybrid RAG Inspector**: Query search showing dense, BM25, RRF, and cross-encoder scores per chunk.
+- **Prometheus Scrape Viewer**: Inspect `/metrics` directly from the UI.
+
 ### Run the Demo
 ```bash
 # Live 4-scene demo: health check, normal chat, PII masking, RAG query with sources
@@ -138,10 +151,12 @@ Evaluated on 48 out-of-distribution queries with 0 training exemplar leakage (`e
 
 ---
 
-## 4. Documentation & Mentor Preparation
-- [docs/PRESENTATION_SCOPE.md](docs/PRESENTATION_SCOPE.md): Strict presentation boundaries (Must Explain vs. Ignore).
+## 4. Documentation & Career Portfolio
+- [docs/RESUME_PORTFOLIO.md](docs/RESUME_PORTFOLIO.md): **Resume bullet points, quantifiable metrics, and technical interview Q&A guide.**
+- [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md): Operational boundaries and production trade-offs catalog.
+- [docs/PRESENTATION_SCOPE.md](docs/PRESENTATION_SCOPE.md): Presentation boundaries and architectural focus areas.
 - [docs/STUDY_FILES.md](docs/STUDY_FILES.md): Concise list of source files to study with rationale.
-- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md): 10-minute 12-step presentation script with talking points.
+- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md): 10-minute presentation script with talking points.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): Architecture diagram and request flow.
 - [docs/SOLUTION_GATEWAY.md](docs/SOLUTION_GATEWAY.md): Gateway design, API spec, and limitations.
 - [docs/SOLUTION_RAG.md](docs/SOLUTION_RAG.md): RAG design, chunking strategies, and limitations.
