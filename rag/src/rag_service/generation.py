@@ -54,6 +54,8 @@ async def generate_grounded_answer(
             strategy=c.strategy,
             dense_score=c.dense_score,
             rerank_score=c.rerank_score,
+            bm25_score=c.bm25_score,
+            rrf_score=c.rrf_score,
             text=c.text,
         )
         for c in chunks

@@ -188,6 +188,9 @@ async def upload_document(
             chunk_counts,
         )
 
+        if retriever:
+            retriever.invalidate_bm25()
+
         return DocumentUploadResponse(
             doc_id=doc_id,
             filename=file.filename,
@@ -237,6 +240,9 @@ async def delete_document(doc_id: str):
             detail=f"Document with doc_id '{doc_id}' not found.",
         )
 
+    if retriever:
+        retriever.invalidate_bm25()
+
     logger.info("Deleted document '%s' (%d chunks removed).", doc_id, deleted_count)
     return DeleteDocumentResponse(
         status="deleted",
@@ -251,7 +257,7 @@ async def delete_document(doc_id: str):
 
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
-    """Retrieve and cross-encoder re-rank document chunks."""
+    """Retrieve and cross-encoder re-rank document chunks via hybrid (BM25 + Dense) or dense search."""
     rag_retriever = retriever or get_retriever(cfg=settings)
 
     results = rag_retriever.retrieve(
@@ -261,6 +267,7 @@ async def query_documents(request: QueryRequest):
         final_k=request.final_k,
         doc_ids=request.doc_ids,
         use_reranker=request.use_reranker,
+        retrieval_mode=request.retrieval_mode,
     )
 
     return QueryResponse(
@@ -283,6 +290,7 @@ async def answer_question(request: QueryRequest):
         final_k=request.final_k,
         doc_ids=request.doc_ids,
         use_reranker=request.use_reranker,
+        retrieval_mode=request.retrieval_mode,
     )
 
     answer_resp = await generate_grounded_answer(

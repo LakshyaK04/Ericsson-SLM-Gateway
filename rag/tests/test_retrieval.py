@@ -111,3 +111,29 @@ def test_retriever_scoped_by_doc_id(tiny_corpus_retriever):
         doc_ids=["test_corpus_doc"],
     )
     assert len(results_matched) > 0
+
+
+def test_hybrid_retrieval_with_bm25_and_rrf(tiny_corpus_retriever):
+    """Hybrid retrieval must return chunks with BM25, RRF, dense, and rerank scores."""
+    retriever, store = tiny_corpus_retriever
+
+    query = "Calico and Cilium CNI plugins networking"
+    results = retriever.retrieve(
+        query=query,
+        strategy="structure",
+        retrieve_k=4,
+        final_k=2,
+        retrieval_mode="hybrid",
+    )
+
+    assert len(results) > 0
+    top = results[0]
+    assert "Kubernetes" in top.text
+    assert top.source == "k8s.pdf"
+
+    # Verify all hybrid scoring fields are populated
+    assert top.dense_score is not None
+    assert top.rerank_score is not None
+    assert top.bm25_score is not None and top.bm25_score > 0.0
+    assert top.rrf_score is not None and top.rrf_score > 0.0
+

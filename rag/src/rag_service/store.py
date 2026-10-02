@@ -177,6 +177,27 @@ class ChromaStore:
             total_deleted += (before_count - after_count)
         return total_deleted
 
+    def get_all_chunks(self, strategy: str) -> List[Dict[str, Any]]:
+        """Retrieve all indexed chunks and metadata for a specific strategy."""
+        if strategy not in self.collections:
+            return []
+        col = self.collections[strategy]
+        if col.count() == 0:
+            return []
+        data = col.get(include=["documents", "metadatas"])
+        chunks = []
+        if data and data["ids"]:
+            for cid, doc, meta in zip(data["ids"], data["documents"], data["metadatas"]):
+                chunks.append({
+                    "chunk_id": cid,
+                    "text": doc,
+                    "source": meta.get("source", ""),
+                    "page": meta.get("page", 1),
+                    "strategy": meta.get("strategy", strategy),
+                    "doc_id": meta.get("doc_id", ""),
+                })
+        return chunks
+
     def count(self, strategy: Optional[str] = None) -> int:
         """Return total chunks in specified strategy or all collections."""
         if strategy:

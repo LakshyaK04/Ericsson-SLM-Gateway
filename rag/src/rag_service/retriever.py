@@ -8,6 +8,7 @@ Per Section 5.5:
 import logging
 from typing import Any, Dict, List, Optional
 
+from .bm25 import BM25Index, reciprocal_rank_fusion
 from .config import Settings, settings
 from .embeddings import EmbeddingModel, get_embedding_model
 from .reranker import Reranker, get_reranker
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class Retriever:
-    """Two-stage retriever combining dense search with cross-encoder re-ranking."""
+    """Two-stage hybrid retriever combining dense vector search and BM25 with cross-encoder re-ranking."""
 
     def __init__(
         self,
@@ -31,6 +32,23 @@ class Retriever:
         self.store = store or get_chroma_store(self.config)
         self.embedding_model = embedding_model or get_embedding_model(self.config)
         self.reranker = reranker or get_reranker(self.config)
+        self.bm25_indices: Dict[str, BM25Index] = {}
+
+    def _get_bm25_index(self, strategy: str) -> BM25Index:
+        """Get or lazily construct the BM25 index for a chunking strategy from ChromaDB."""
+        if strategy not in self.bm25_indices:
+            idx = BM25Index()
+            chunks = self.store.get_all_chunks(strategy)
+            idx.index_chunks(chunks)
+            self.bm25_indices[strategy] = idx
+        return self.bm25_indices[strategy]
+
+    def invalidate_bm25(self, strategy: Optional[str] = None) -> None:
+        """Invalidate cached BM25 index after document ingestion or deletion."""
+        if strategy:
+            self.bm25_indices.pop(strategy, None)
+        else:
+            self.bm25_indices.clear()
 
     def retrieve(
         self,
@@ -40,21 +58,24 @@ class Retriever:
         final_k: int = 3,
         doc_ids: Optional[List[str]] = None,
         use_reranker: bool = True,
+        retrieval_mode: str = "hybrid",
     ) -> List[QueryResultItem]:
-        """Execute two-stage retrieval and return re-ranked chunks with both scores.
+        """Execute hybrid two-stage retrieval and return re-ranked chunks with all scores.
 
-        WHY: Dense bi-encoder search (BGE-small) is fast (~10ms) to retrieve an initial
-        candidate pool of 20 chunks from ChromaDB. The neural cross-encoder (bge-reranker-base)
-        then applies deep cross-attention across (query, text) pairs to accurately filter down
-        to the top 3 chunks for downstream answer generation.
+        WHY: Dense bi-encoder search (BGE-small) excels at conceptual semantic similarity,
+        while sparse lexical search (Okapi BM25) excels at precise keyword, acronym, and
+        identifier matching (e.g. EMP-12345, error codes, telecom standards). Fusing both
+        via Reciprocal Rank Fusion (RRF) before the neural cross-encoder yields state-of-the-art
+        retrieval robustness.
 
         Args:
             query: User search query.
             strategy: Chunking strategy to query ('character', 'structure', 'semantic').
-            retrieve_k: Number of initial candidates to pull from ChromaDB (default 20).
+            retrieve_k: Number of initial candidates to pull per retriever (default 20).
             final_k: Number of top re-ranked chunks to return (default 3).
             doc_ids: Optional list of document IDs to scope search.
             use_reranker: Whether to apply neural cross-encoder re-ranking (default True).
+            retrieval_mode: 'hybrid' (BM25 + Dense RRF) or 'dense' (vector only).
 
         Returns:
             List of QueryResultItem instances.
@@ -62,17 +83,33 @@ class Retriever:
         if not query or not query.strip():
             return []
 
-        # Stage 1: Dense Retrieval
-        # Encode query with BGE instruction prefix
+        # Stage 1A: Dense Bi-Encoder Retrieval
         query_embedding = self.embedding_model.encode_query(query)
-
-        # Pull top retrieve_k candidates from Chroma
-        candidates = self.store.query(
+        dense_candidates = self.store.query(
             strategy=strategy,
             query_embedding=query_embedding,
             n_results=retrieve_k,
             doc_ids=doc_ids,
         )
+
+        if retrieval_mode == "hybrid":
+            # Stage 1B: Sparse Lexical Retrieval (BM25)
+            bm25_idx = self._get_bm25_index(strategy)
+            lexical_candidates = bm25_idx.search(
+                query=query,
+                top_k=retrieve_k,
+                doc_ids=doc_ids,
+            )
+
+            # Stage 1C: Reciprocal Rank Fusion
+            candidates = reciprocal_rank_fusion(
+                dense_results=dense_candidates,
+                lexical_results=lexical_candidates,
+                rrf_k=60,
+                top_k=retrieve_k,
+            )
+        else:
+            candidates = dense_candidates
 
         if not candidates:
             logger.info("No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy)
@@ -86,7 +123,8 @@ class Retriever:
                 top_k=final_k,
             )
         else:
-            reranked = sorted(candidates, key=lambda c: c.get("dense_score", 0.0), reverse=True)[:final_k]
+            sort_key = "rrf_score" if retrieval_mode == "hybrid" else "dense_score"
+            reranked = sorted(candidates, key=lambda c: c.get(sort_key, 0.0), reverse=True)[:final_k]
 
         # Convert to Pydantic items
         items = [
@@ -98,6 +136,8 @@ class Retriever:
                 strategy=c.get("strategy", strategy),
                 dense_score=c.get("dense_score", 0.0),
                 rerank_score=c.get("rerank_score", 0.0),
+                bm25_score=c.get("bm25_score"),
+                rrf_score=c.get("rrf_score"),
             )
             for c in reranked
         ]

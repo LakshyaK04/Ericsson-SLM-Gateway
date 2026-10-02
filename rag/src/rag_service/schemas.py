@@ -42,10 +42,14 @@ class QueryRequest(BaseModel):
     final_k: int = Field(default=3, ge=1, le=50)
     doc_ids: Optional[List[str]] = None
     use_reranker: bool = Field(default=True, description="Whether to apply neural cross-encoder re-ranking.")
+    retrieval_mode: Literal["dense", "hybrid"] = Field(
+        default="hybrid",
+        description="Retrieval mode: 'dense' (BGE vector search) or 'hybrid' (BM25 + Dense RRF fusion).",
+    )
 
 
 class QueryResultItem(BaseModel):
-    """Individual retrieved and re-ranked chunk with dense and reranker scores."""
+    """Individual retrieved and re-ranked chunk with dense, BM25, RRF, and reranker scores."""
     chunk_id: str
     text: str
     source: str
@@ -53,6 +57,8 @@ class QueryResultItem(BaseModel):
     strategy: str
     dense_score: float
     rerank_score: float
+    bm25_score: Optional[float] = None
+    rrf_score: Optional[float] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -72,6 +78,8 @@ class SourceItem(BaseModel):
     strategy: str
     dense_score: float
     rerank_score: float
+    bm25_score: Optional[float] = None
+    rrf_score: Optional[float] = None
     text: str
 
 
