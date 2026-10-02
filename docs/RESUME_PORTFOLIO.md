@@ -30,7 +30,7 @@ This document provides ready-to-paste resume bullet points, quantifiable metrics
 | **PII Redaction Recall** | 0% (Raw unredacted text) | **100.0%** (33/33 test cases) | Zero egress of sensitive IDs/names |
 | **PII False-Positive Rate** | N/A | **0.0%** (Preserves locations/dates) | Unmangled natural conversations |
 | **Router Accuracy** | Keyword heuristics (unstable) | **93.75%** (45/48 test queries) | Reliable automated delegation |
-| **Router Latency** | Cloud LLM routing (1200+ ms) | **12.3 ms** (In-process BGE-small) | **~100x lower latency** |
+| **Router Latency** | Cloud LLM routing (1200+ ms) | **13.3 ms** (In-process BGE-small) | **~100x lower latency** |
 | **GPU Memory Footprint** | ~7.8 GB (FP16 Phi-3) | **~2.4 GB** (4-bit NF4 quantized) | Fits easily on consumer/edge GPUs |
 
 ---

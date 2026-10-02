@@ -86,7 +86,7 @@ Configure via environment variables or `.env`:
 
 ```bash
 curl -X POST http://localhost:8001/documents \
-  -F "file=@eval/docs/ericsson_5g_core_architecture.pdf" \
+  -F "file=@eval/docs/5g_core_architecture.pdf" \
   -F "strategies=character,structure,semantic"
 ```
 

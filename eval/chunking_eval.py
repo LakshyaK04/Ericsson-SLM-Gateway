@@ -56,8 +56,8 @@ def run_evaluation():
     results_dir.mkdir(parents=True, exist_ok=True)
 
     doc_files = [
-        docs_dir / "ericsson_rag_sample.pdf",
-        docs_dir / "ericsson_5g_core_architecture.pdf",
+        docs_dir / "enterprise_rag_sample.pdf",
+        docs_dir / "5g_core_architecture.pdf",
         docs_dir / "cloud_native_telecom_infrastructure.pdf",
     ]
 
@@ -265,7 +265,7 @@ def run_evaluation():
             f.write("## 4. Key Findings & Analysis\n\n")
             f.write("### 4.1 Impact of Cross-Encoder Re-Ranking\n")
             f.write("- **Selective Hit@1 Improvement**: Neural cross-encoder re-ranking improved Hit@1 for `structure` (86.1% to 100.0%) and `semantic` (80.6% to 94.4%).\n")
-            f.write("- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), as severed sentences lack full context for cross-attention.\n")
+            f.write("- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), possibly because severed sentences lack full context for cross-attention.\n")
             f.write("- **Measured Latency Cost**: Re-ranking 20 candidates adds cross-encoder inference overhead, raising total query latency from ~20-25ms to ~215-235ms.\n\n")
 
             f.write("### 4.2 Strategy Comparison\n")

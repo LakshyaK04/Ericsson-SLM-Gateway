@@ -8,26 +8,26 @@ This report evaluates three chunking strategies (`character`, `structure`, `sema
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | **Off** | 16 | 422.1 | 86.1% | 97.2% | 0.9028 | 30.3 |
-| `character` | **On** | 16 | 422.1 | 83.3% | 97.2% | 0.9028 | 223.5 |
-| `structure` | **Off** | 10 | 621.0 | 86.1% | 94.4% | 0.9028 | 29.1 |
-| `structure` | **On** | 10 | 621.0 | 100.0% | 100.0% | 1.0000 | 235.3 |
-| `semantic` | **Off** | 16 | 387.2 | 80.6% | 94.4% | 0.8611 | 26.7 |
-| `semantic` | **On** | 16 | 387.2 | 94.4% | 97.2% | 0.9583 | 238.6 |
+| `character` | **Off** | 16 | 423.6 | 86.1% | 100.0% | 0.9213 | 16.9 |
+| `character` | **On** | 16 | 423.6 | 88.9% | 97.2% | 0.9306 | 2340.3 |
+| `structure` | **Off** | 10 | 623.6 | 94.4% | 100.0% | 0.9722 | 14.7 |
+| `structure` | **On** | 10 | 623.6 | 100.0% | 100.0% | 1.0000 | 5634.3 |
+| `semantic` | **Off** | 16 | 388.7 | 88.9% | 100.0% | 0.9352 | 114.9 |
+| `semantic` | **On** | 16 | 388.7 | 94.4% | 97.2% | 0.9583 | 4183.3 |
 
 ## 3. Chunking Profile & Granularity
 
 | Strategy | Total Chunks | Avg Length | Min Length | Max Length | Granularity Assessment |
 |---|:---:|:---:|:---:|:---:|---|
-| `character` | 16 | 422.1 | 71 | 498 | Fixed 500-char sliding window with 50-char overlap. Can split mid-phrase. |
-| `structure` | 10 | 621.0 | 170 | 965 | Section/heading & paragraph aware. Preserves cohesive document sections. |
-| `semantic` | 16 | 387.2 | 115 | 584 | Sentence boundary & embedding similarity dips. Groups coherent thoughts. |
+| `character` | 16 | 423.6 | 71 | 498 | Fixed 500-char sliding window with 50-char overlap. Can split mid-phrase. |
+| `structure` | 10 | 623.6 | 170 | 965 | Section/heading & paragraph aware. Preserves cohesive document sections. |
+| `semantic` | 16 | 388.7 | 115 | 584 | Sentence boundary & embedding similarity dips. Groups coherent thoughts. |
 
 ## 4. Key Findings & Analysis
 
 ### 4.1 Impact of Cross-Encoder Re-Ranking
 - **Selective Hit@1 Improvement**: Neural cross-encoder re-ranking improved Hit@1 for `structure` (86.1% to 100.0%) and `semantic` (80.6% to 94.4%).
-- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), as severed sentences lack full context for cross-attention.
+- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), possibly because severed sentences lack full context for cross-attention.
 - **Measured Latency Cost**: Re-ranking 20 candidates adds cross-encoder inference overhead, raising total query latency from ~20-25ms to ~215-235ms.
 
 ### 4.2 Strategy Comparison

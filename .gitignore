@@ -29,9 +29,14 @@ htmlcov/
 .cache/
 huggingface/
 models/
+*.gguf
+*.safetensors
+*.pt
+*.bin
 
 # ChromaDB persistence
 chroma_data/
+chroma_db/
 data/
 *.sqlite3
 

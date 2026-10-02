@@ -3,9 +3,9 @@
 # its own dependencies. This file ties them together for development.
 
 [project]
-name = "ericsson-genai-stack"
+name = "local-genai-stack"
 version = "0.1.0"
-description = "Local GenAI Stack — SLM Gateway + RAG Pipeline"
+description = "Local GenAI Stack — Privacy-First SLM Gateway + Hybrid Document RAG Pipeline"
 readme = "README.md"
 authors = [
     { name = "Lakshya Kapoor", email = "kapoorlakshya42@gmail.com" }
@@ -19,11 +19,11 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
     "openai>=1.0.0",
+    "pillow>=12.3.0",
 ]
 
-[build-system]
-requires = ["uv_build>=0.12.5,<0.13.0"]
-build-backend = "uv_build"
+[tool.uv]
+package = false
 
 [tool.uv.workspace]
 members = ["gateway", "rag"]

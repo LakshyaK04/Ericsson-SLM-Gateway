@@ -72,25 +72,25 @@ Liveness probe returning `{"status": "ok"}`.
 ## 4. Empirical Evaluation Results
 
 Evaluated on a small synthetic benchmark (3 PDFs / 5 pages from `scripts/create_eval_docs.py` and 36 questions):
-- `ericsson_rag_sample.pdf` (Ericsson AI Platform)
-- `ericsson_5g_core_architecture.pdf` (5G SBA, AMF, SMF, UPF, Slicing)
+- `enterprise_rag_sample.pdf` (Enterprise AI Platform)
+- `5g_core_architecture.pdf` (5G SBA, AMF, SMF, UPF, Slicing)
 - `cloud_native_telecom_infrastructure.pdf` (CNFs, SR-IOV, DPDK, Multus CNI, ZTA)
 
 Evaluated via `eval/chunking_eval.py` comparing **Dense-Only** vs. **Two-Stage Re-Ranking**:
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **`character`** | **Off** | 16 | 422.1 | 86.11% | 97.22% | 0.9028 | 11.6 |
-| **`character`** | **On** | 16 | 422.1 | 83.33% | 97.22% | 0.9028 | 152.2 |
-| **`structure`** | **Off** | 10 | 621.0 | 86.11% | 94.44% | 0.9028 | 9.8 |
-| **`structure`** | **On** | **10** | **621.0** | **100.00%** | **100.00%** | **1.0000** | **159.3** |
-| **`semantic`** | **Off** | 16 | 387.2 | 80.56% | 94.44% | 0.8611 | 10.1 |
-| **`semantic`** | **On** | 16 | 387.2 | **94.44%** | **97.22%** | **0.9583** | **166.9** |
+| **`character`** | **Off** | 16 | 423.6 | 86.11% | 100.00% | 0.9213 | 16.9 |
+| **`character`** | **On** | 16 | 423.6 | 88.89% | 97.22% | 0.9306 | 2340.3 |
+| **`structure`** | **Off** | 10 | 623.6 | 94.44% | 100.00% | 0.9722 | 14.7 |
+| **`structure`** | **On** | **10** | **623.6** | **100.00%** | **100.00%** | **1.0000** | **5634.3** |
+| **`semantic`** | **Off** | 16 | 388.7 | 88.89% | 100.00% | 0.9352 | 114.9 |
+| **`semantic`** | **On** | 16 | 388.7 | **94.44%** | **97.22%** | **0.9583** | **4183.3** |
 
 ### Benchmark Takeaways
 1. **Structure Chunking Accuracy**: Structure chunking achieved 100% Hit@1 with the re-ranker. Technical documents organized around clear headings benefit when sections are kept whole.
-2. **Selective Re-Ranking Gain**: The cross-encoder improved Hit@1 on `structure` (+13.89%) and `semantic` (+13.88%), but did not improve `character` chunking (83.33% vs 86.11%).
-3. **Measured Latency Cost**: Pure dense lookup takes ~10-12ms, while neural cross-encoder re-ranking adds ~140-155ms per query (total ~152-167ms).
+2. **Selective Re-Ranking Gain**: The cross-encoder improved Hit@1 on `structure` (+5.56%) and `semantic` (+5.55%).
+3. **Measured Latency Cost**: Pure dense lookup takes ~15-20ms, while neural cross-encoder re-ranking adds significant CPU inference overhead without GPU acceleration.
 
 ---
 
@@ -100,10 +100,10 @@ In `rag_service.generation`, retrieved top-3 chunks are assembled into a structu
 
 ```text
 Context from uploaded documents:
-[1] Document: ericsson_5g_core.pdf (Page 1)
+[1] Document: 5g_core_architecture.pdf (Page 1)
 The Access and Mobility Management Function (AMF) handles connection and mobility tasks...
 
-[2] Document: ericsson_5g_core.pdf (Page 1)
+[2] Document: 5g_core_architecture.pdf (Page 1)
 The Session Management Function (SMF) allocates IP addresses and controls UPF data paths...
 
 Query: What does the AMF do in 5G Core?

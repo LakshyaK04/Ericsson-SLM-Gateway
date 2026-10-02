@@ -291,7 +291,7 @@ def test_playground_endpoint(client):
     resp1 = client.get("/")
     assert resp1.status_code == 200
     assert "text/html" in resp1.headers["content-type"]
-    assert "Ericsson" in resp1.text
+    assert "Local GenAI Stack" in resp1.text
     assert "Playground" in resp1.text
 
     resp2 = client.get("/playground")

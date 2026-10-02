@@ -6,13 +6,13 @@ This document provides a concise technical overview, API specification, design r
 
 ## 1. System Overview
 
-The **SLM Gateway** acts as the secure, intelligent "front door" for enterprise generative AI workloads. It exposes an industry-standard, OpenAI-compatible chat completions interface (`/v1/chat/completions`), enforces client-side PII privacy policies before inference, and dynamically routes requests using semantic embeddings to the appropriate backend.
+The **SLM Gateway** acts as the secure reverse proxy and ingestion gateway for local generative AI workloads. It exposes an industry-standard, OpenAI-compatible chat completions interface (`/v1/chat/completions`), enforces client-side PII privacy policies before inference, and dynamically routes requests using semantic embeddings to the appropriate backend.
 
 ### Key Capabilities
-- **OpenAI Compatibility**: Drop-in replacement for OpenAI SDKs and tools (`chatcmpl-...` response envelopes, token usage tracking).
+- **OpenAI Compatibility**: Drop-in replacement for OpenAI SDKs and tools (`chatcmpl-...` response envelopes, token usage tracking, and SSE streaming).
 - **In-Process Model Serving**: Serves `microsoft/Phi-3-mini-4k-instruct` in 4-bit NF4 quantization via HuggingFace Transformers and `bitsandbytes`.
-- **Fail-Closed PII Masking**: Identifies and masks personal identifiers (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`) and custom enterprise IDs (`EMPLOYEE_ID`) with typed placeholders.
-- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~12ms using `BAAI/bge-small-en-v1.5` embeddings.
+- **Fail-Closed PII Masking**: Identifies and masks personal identifiers (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`), custom enterprise IDs (`EMPLOYEE_ID`), and project codenames with typed placeholders.
+- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~13.3ms using `BAAI/bge-small-en-v1.5` embeddings.
 - **RAG Delegation**: Orchestrates grounded retrieval-augmented queries to the RAG microservice with automatic loop prevention (`X-Bypass-Router`) and fallback handling.
 
 ---
@@ -144,7 +144,7 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 ## 6. Limitations
 
 1. **Single-GPU Semaphore Concurrency**: Because in-process generation runs behind a semaphore of size 1, concurrent requests queue sequentially. For heavy concurrency, deploy multiple replicas or switch `BACKEND=openai_compatible` to route to an external engine like vLLM.
-2. **Lack of SSE Streaming**: Completions are generated in a single batch (`stream=false`). Requests with `stream=true` return HTTP 400.
+2. **Batch vs Streaming**: Both SSE streaming (`stream=true`) and standard buffered completions (`stream=false`) are supported.
 3. **English-Language NER**: The bundled Presidio recognizers and spaCy model (`en_core_web_sm`) are trained on English syntax; non-English prompts may have lower entity detection recall.
 4. **Out-of-Distribution Routing**: Queries far removed from exemplar topics that score below the 0.55 similarity threshold fall back cleanly to `general`.
 5. **GPU Container Passthrough**: Running GPU inference inside Docker requires the host to have the NVIDIA Container Toolkit installed; otherwise CPU fallback or `openai_compatible` backend must be used.

@@ -1,4 +1,4 @@
-"""Demonstration Script for Ericsson Local GenAI Stack.
+"""Demonstration Script for Local GenAI Stack.
 
 Executes a 4-scene live demonstration:
 1. Health check (Gateway & RAG service)
@@ -79,7 +79,7 @@ def demo_pii_redaction(gateway_url: str):
     print_header("PII Masking & Privacy Protection", 3)
     prompt = (
         "Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. My contact is "
-        "alice.smith@ericsson.com or +46-8-555-1234. I work at the headquarters in Stockholm."
+        "alice.smith@company.com or +1-555-0199. I work at the headquarters in Stockholm."
     )
     print("[*] Original Inbound User Query:")
     print(f"    \"{prompt}\"")
@@ -107,7 +107,7 @@ def demo_pii_redaction(gateway_url: str):
 def demo_rag_pipeline(gateway_url: str, rag_url: str):
     print_header("Grounded RAG Query with Sources", 4)
 
-    pdf_path = Path("eval/docs/ericsson_rag_sample.pdf")
+    pdf_path = Path("eval/docs/enterprise_rag_sample.pdf")
     if not pdf_path.exists():
         print(f"[!] Reference document {pdf_path} not found.")
         return
@@ -125,7 +125,7 @@ def demo_rag_pipeline(gateway_url: str, rag_url: str):
 
     query = (
         "According to the uploaded documentation, what capabilities does the "
-        "Ericsson AI Platform provide for enterprise deployments?"
+        "Enterprise AI Platform provide for enterprise deployments?"
     )
     print(f"\n[*] Querying through Gateway (Front Door Port 8000):")
     print(f"    \"{query}\"")
@@ -192,7 +192,7 @@ def main():
         return
 
     print("\n" + SEPARATOR)
-    print("      ERICSSON LOCAL GENAI STACK: LIVE DEMONSTRATION")
+    print("      LOCAL GENAI STACK: LIVE DEMONSTRATION")
     print(SEPARATOR)
 
     if not check_services(args.gateway_url, args.rag_url):

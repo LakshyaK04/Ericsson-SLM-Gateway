@@ -276,7 +276,7 @@ We implemented the FastAPI application in `main.py`:
 - `POST /query`: Two-stage retrieval returning top-k re-ranked chunks with dual scores.
 - `GET /health`: Liveness probe reporting healthy status and registered collections.
 
-We verified the service with 15 passing tests (`test_chunking.py`, `test_parsers.py`, `test_retrieval.py`, `test_api.py`) and executed live verification uploading `ericsson_rag_sample.pdf` and querying the service.
+We verified the service with 15 passing tests (`test_chunking.py`, `test_parsers.py`, `test_retrieval.py`, `test_api.py`) and executed live verification uploading `enterprise_rag_sample.pdf` and querying the service.
 
 ### Glossary
 
@@ -336,8 +336,8 @@ print('Health:', client.get('/health').json())
 We built the empirical chunking strategy and re-ranking evaluation framework to systematically compare `character`, `structure`, and `semantic` chunking strategies on a curated technical corpus:
 
 1. **Evaluation Corpus (`eval/docs/`)**:
-   - `ericsson_rag_sample.pdf`: Overview of the Ericsson AI Platform, OpenAI-compatible model serving, ingestion pipelines, RAG, and PII protection.
-   - `ericsson_5g_core_architecture.pdf`: 2-page detailed technical specification of 3GPP 5G Core Service-Based Architecture (SBA), control plane NFs (AMF, SMF, NRF, NSSF, PCF), user plane operations (UPF, PDR, N6 interface, CHF), and network slicing (SST 1/2/3).
+   - `enterprise_rag_sample.pdf`: Overview of the Enterprise AI Platform, OpenAI-compatible model serving, ingestion pipelines, RAG, and PII protection.
+   - `5g_core_architecture.pdf`: 2-page detailed technical specification of 3GPP 5G Core Service-Based Architecture (SBA), control plane NFs (AMF, SMF, NRF, NSSF, PCF), user plane operations (UPF, PDR, N6 interface, CHF), and network slicing (SST 1/2/3).
    - `cloud_native_telecom_infrastructure.pdf`: 2-page technical guide covering Containerized Network Functions (CNFs), high-performance networking acceleration (SR-IOV, DPDK, XDP, eBPF), Kubernetes multi-network CNI plugins (Multus), Zero-Trust Architecture (ZTA, mTLS, SPIFFE/SPIRE), and OpenTelemetry observability.
 
 2. **Ground-Truth QA Dataset (`eval/datasets/chunking_qa.jsonl`)**:
@@ -491,7 +491,7 @@ We packaged, documented, and automated the complete multi-service stack for turn
    - Pinned `python:3.10-slim` base images.
    - Container hardening via dedicated non-root execution (`appuser`, UID 10001).
    - Embedded Docker healthchecks for container orchestration probes.
-   - `docker-compose.yml` linking Gateway and RAG on a private bridge network (`ericsson-net`), with persistent named volumes for ChromaDB data (`chroma-data`) and HuggingFace model cache (`hf-cache`).
+   - `docker-compose.yml` linking Gateway and RAG on a private bridge network (`local-net`), with persistent named volumes for ChromaDB data (`chroma-data`) and HuggingFace model cache (`hf-cache`).
    - Declared `depends_on.rag.condition: service_healthy` to guarantee deterministic boot ordering.
    - Documented `nvidia-container-toolkit` GPU configuration for host environments.
 

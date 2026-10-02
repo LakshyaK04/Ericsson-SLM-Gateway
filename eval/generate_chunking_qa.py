@@ -10,8 +10,8 @@ sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 from rag_service.parsers import extract_pages_from_pdf
 
 docs = {
-    "ericsson_rag_sample.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "ericsson_rag_sample.pdf"),
-    "ericsson_5g_core_architecture.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "ericsson_5g_core_architecture.pdf"),
+    "enterprise_rag_sample.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "enterprise_rag_sample.pdf"),
+    "5g_core_architecture.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "5g_core_architecture.pdf"),
     "cloud_native_telecom_infrastructure.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "cloud_native_telecom_infrastructure.pdf"),
 }
 
@@ -24,31 +24,31 @@ doc_texts = {name: normalize_text(" ".join(t for _, t in pages)) for name, pages
 
 # Curate 36 precise questions with exact verbatim substrings
 qa_pairs = [
-    # Document 1: ericsson_rag_sample.pdf (8 questions)
-    ("What does the Ericsson AI Platform provide?", "deploying and operating artificial intelligence", "ericsson_rag_sample.pdf"),
-    ("How can small language models be served on the platform?", "OpenAI-compatible API", "ericsson_rag_sample.pdf"),
-    ("What does the serving layer manage?", "manages model inference and accepts chat completion requests", "ericsson_rag_sample.pdf"),
-    ("How are documents processed in the ingestion pipeline?", "extracting text, cleaning the text, and dividing it into smaller chunks", "ericsson_rag_sample.pdf"),
-    ("What are document chunks converted into for semantic search?", "converted into vector embeddings", "ericsson_rag_sample.pdf"),
-    ("What two components are combined in RAG?", "document retrieval with language model generation", "ericsson_rag_sample.pdf"),
-    ("What should incoming user prompts be checked for?", "personally identifiable information", "ericsson_rag_sample.pdf"),
-    ("What can detected PII be replaced with?", "anonymized placeholders", "ericsson_rag_sample.pdf"),
+    # Document 1: enterprise_rag_sample.pdf (8 questions)
+    ("What does the Enterprise AI Platform provide?", "deploying and operating artificial intelligence", "enterprise_rag_sample.pdf"),
+    ("How can small language models be served on the platform?", "OpenAI-compatible API", "enterprise_rag_sample.pdf"),
+    ("What does the serving layer manage?", "manages model inference and accepts chat completion requests", "enterprise_rag_sample.pdf"),
+    ("How are documents processed in the ingestion pipeline?", "extracts text, cleans the text, and divides it into smaller chunks", "enterprise_rag_sample.pdf"),
+    ("What are document chunks converted into for semantic search?", "converted into vector embeddings", "enterprise_rag_sample.pdf"),
+    ("What two components are combined in RAG?", "document retrieval with language model generation", "enterprise_rag_sample.pdf"),
+    ("What should incoming user prompts be checked for?", "personally identifiable information", "enterprise_rag_sample.pdf"),
+    ("What can detected PII be replaced with?", "anonymized placeholders", "enterprise_rag_sample.pdf"),
 
-    # Document 2: ericsson_5g_core_architecture.pdf (14 questions)
-    ("What architecture does the 3GPP 5G Core adopt?", "cloud-native Service-Based Architecture", "ericsson_5g_core_architecture.pdf"),
-    ("What protocol and payload format do 5GC control plane NFs use?", "HTTP/2 protocol and JavaScript Object Notation", "ericsson_5g_core_architecture.pdf"),
-    ("Which interface connects the RAN control plane to the AMF?", "N2 interface", "ericsson_5g_core_architecture.pdf"),
-    ("What signaling protocol is terminated by the AMF on the N1 interface?", "Non-Access Stratum", "ericsson_5g_core_architecture.pdf"),
-    ("What responsibilities belong to the AMF?", "registration management, connection management", "ericsson_5g_core_architecture.pdf"),
-    ("Which network function selects and controls the UPF?", "Session Management Function", "ericsson_5g_core_architecture.pdf"),
-    ("What is the role of the Network Repository Function (NRF)?", "catalog of all active NF instances", "ericsson_5g_core_architecture.pdf"),
-    ("How does the NSSF choose slice instances for users?", "subscribed S-NSSAI", "ericsson_5g_core_architecture.pdf"),
-    ("What is the primary data path anchor in 5G networks?", "User Plane Function (UPF) is the primary data path anchor", "ericsson_5g_core_architecture.pdf"),
-    ("Which rules are used by the UPF for packet classification?", "Packet Detection Rules (PDR)", "ericsson_5g_core_architecture.pdf"),
-    ("Which interface connects the UPF to external Data Networks?", "N6 interface", "ericsson_5g_core_architecture.pdf"),
-    ("Which function handles billing usage reporting from the UPF?", "Charging Function (CHF)", "ericsson_5g_core_architecture.pdf"),
-    ("What performance characteristics define SST 1?", "Enhanced Mobile Broadband (eMBB)", "ericsson_5g_core_architecture.pdf"),
-    ("What latency requirement defines SST 2 URLLC slices?", "sub-millisecond radio transit time", "ericsson_5g_core_architecture.pdf"),
+    # Document 2: 5g_core_architecture.pdf (14 questions)
+    ("What architecture does the 3GPP 5G Core adopt?", "cloud-native Service-Based Architecture", "5g_core_architecture.pdf"),
+    ("What protocol and payload format do 5GC control plane NFs use?", "HTTP/2 protocol and JavaScript Object Notation", "5g_core_architecture.pdf"),
+    ("Which interface connects the RAN control plane to the AMF?", "N2 interface", "5g_core_architecture.pdf"),
+    ("What signaling protocol is terminated by the AMF on the N1 interface?", "Non-Access Stratum", "5g_core_architecture.pdf"),
+    ("What responsibilities belong to the AMF?", "registration management, connection management", "5g_core_architecture.pdf"),
+    ("Which network function selects and controls the UPF?", "Session Management Function", "5g_core_architecture.pdf"),
+    ("What is the role of the Network Repository Function (NRF)?", "catalog of all active NF instances", "5g_core_architecture.pdf"),
+    ("How does the NSSF choose slice instances for users?", "subscribed S-NSSAI", "5g_core_architecture.pdf"),
+    ("What is the primary data path anchor in 5G networks?", "User Plane Function (UPF) is the primary data path anchor", "5g_core_architecture.pdf"),
+    ("Which rules are used by the UPF for packet classification?", "Packet Detection Rules (PDR)", "5g_core_architecture.pdf"),
+    ("Which interface connects the UPF to external Data Networks?", "N6 interface", "5g_core_architecture.pdf"),
+    ("Which function handles billing usage reporting from the UPF?", "Charging Function (CHF)", "5g_core_architecture.pdf"),
+    ("What performance characteristics define SST 1?", "Enhanced Mobile Broadband (eMBB)", "5g_core_architecture.pdf"),
+    ("What latency requirement defines SST 2 URLLC slices?", "sub-millisecond radio transit time", "5g_core_architecture.pdf"),
 
     # Document 3: cloud_native_telecom_infrastructure.pdf (14 questions)
     ("What are operators transitioning to from Virtual Machines?", "Containerized Network Functions (CNFs)", "cloud_native_telecom_infrastructure.pdf"),

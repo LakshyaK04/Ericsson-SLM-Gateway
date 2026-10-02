@@ -85,8 +85,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Ericsson SLM Gateway",
-    description="OpenAI-compatible SLM Gateway with PII redaction and semantic routing",
+    title="Local SLM Gateway",
+    description="OpenAI-compatible SLM Gateway with PII redaction, semantic routing, and streaming",
     version="0.1.0",
     lifespan=lifespan,
 )

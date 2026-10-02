@@ -79,5 +79,22 @@ Observability is provided through OpenTelemetry standards:
 - Real-time packet telemetry collected via eBPF probes for anomaly detection."""
 ]
 
-create_pdf(DOCS_DIR / "ericsson_5g_core_architecture.pdf", doc2_pages)
+doc1_pages = [
+    """Enterprise AI Platform — Technical Overview
+
+Section 1. Platform Capabilities
+The Enterprise AI Platform provides services for deploying and operating artificial intelligence applications. The platform supports model serving, document processing, retrieval, and API-based access to language models.
+
+Section 2. Model Serving Layer
+Small language models can be served through an OpenAI-compatible API. The serving layer manages model inference and accepts chat completion requests with low latency.
+
+Section 3. Document Ingestion Pipeline
+How are documents processed in the ingestion pipeline? The pipeline extracts text, cleans the text, and divides it into smaller chunks. Document chunks are converted into vector embeddings for semantic search. Retrieval-Augmented Generation (RAG) combines document retrieval with language model generation.
+
+Section 4. Privacy and Guardrails
+Incoming user prompts are checked for personally identifiable information (PII). Detected PII entities like email addresses, phone numbers, employee IDs, and internal codenames are replaced with anonymized placeholders before model inference."""
+]
+
+create_pdf(DOCS_DIR / "enterprise_rag_sample.pdf", doc1_pages)
+create_pdf(DOCS_DIR / "5g_core_architecture.pdf", doc2_pages)
 create_pdf(DOCS_DIR / "cloud_native_telecom_infrastructure.pdf", doc3_pages)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ericsson Local GenAI Stack — Enterprise SLM Gateway & Hybrid RAG</title>
+  <title>Local GenAI Stack — Privacy-First SLM Gateway & Hybrid RAG</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -484,10 +484,10 @@
 
   <header>
     <div class="brand">
-      <div class="brand-icon">E</div>
+      <div class="brand-icon">⚡</div>
       <div>
         <div class="brand-title">SLM Gateway & Hybrid RAG Playground</div>
-        <div class="brand-subtitle">Ericsson Local GenAI Stack</div>
+        <div class="brand-subtitle">Local GenAI Stack</div>
       </div>
     </div>
     <div class="status-pills">
@@ -518,8 +518,8 @@
         <div class="preset-container">
           <span class="preset-label">Presets:</span>
           <span class="preset-chip" onclick="setChatPrompt('Explain how the Raft consensus algorithm handles leader election.')">Raft Consensus (Technical)</span>
-          <span class="preset-chip" onclick="setChatPrompt('Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. Email me at alice@ericsson.com.')">PII Protection (Privacy)</span>
-          <span class="preset-chip" onclick="setChatPrompt('According to the uploaded documentation, what capabilities does the Ericsson AI Platform provide?')">Document Query (RAG)</span>
+          <span class="preset-chip" onclick="setChatPrompt('Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. Email me at alice@company.com.')">PII Protection (Privacy)</span>
+          <span class="preset-chip" onclick="setChatPrompt('According to the uploaded documentation, what capabilities does the Enterprise AI Platform provide?')">Document Query (RAG)</span>
         </div>
 
         <textarea id="chat-input" placeholder="Type a message or select a preset..."></textarea>
@@ -571,7 +571,7 @@
         </div>
         <div class="preset-container">
           <span class="preset-label">Test Case:</span>
-          <span class="preset-chip" onclick="setPiiText('Alice Smith (EMP-92812) on Project Phoenix. Contact alice@ericsson.com or +46-8-555-1234 in Stockholm.')">All Entities</span>
+          <span class="preset-chip" onclick="setPiiText('Alice Smith (EMP-92812) on Project Phoenix. Contact alice@company.com or +1-555-0199 in Stockholm.')">All Entities</span>
           <span class="preset-chip" onclick="setPiiText('What is the capital of Germany and when was the conference held?')">Preserve Location & Date</span>
         </div>
         <textarea id="pii-input" placeholder="Type text with personal data or codenames..."></textarea>
@@ -677,7 +677,7 @@
   </main>
 
   <footer>
-    Ericsson Local GenAI Stack — Privacy-First SLM Gateway & Two-Stage Hybrid RAG Architecture
+    Local GenAI Stack — Privacy-First SLM Gateway & Two-Stage Hybrid RAG Architecture
   </footer>
 
   <script>

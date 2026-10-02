@@ -69,7 +69,7 @@ def test_rag_routing_with_indexed_documents_returns_sources(client, monkeypatch)
             "answer": "According to the document [1], the UPF is the primary data path anchor.",
             "sources": [
                 {
-                    "source": "ericsson_5g_core_architecture.pdf",
+                    "source": "5g_core_architecture.pdf",
                     "page": 2,
                     "chunk_id": "c_upf_1",
                     "strategy": "structure",
@@ -103,7 +103,7 @@ def test_rag_routing_with_indexed_documents_returns_sources(client, monkeypatch)
     assert data["x_routing"]["route"] == "rag_service"
     assert data["x_sources"] is not None
     assert len(data["x_sources"]) == 1
-    assert data["x_sources"][0]["source"] == "ericsson_5g_core_architecture.pdf"
+    assert data["x_sources"][0]["source"] == "5g_core_architecture.pdf"
     assert data["usage"]["total_tokens"] == 138
 
 

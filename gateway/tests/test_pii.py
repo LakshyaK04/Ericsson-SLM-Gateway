@@ -65,7 +65,7 @@ def redactor():
 @pytest.mark.parametrize(
     "input_text,expected_placeholder,entity_type",
     [
-        ("My email is alice@ericsson.com please reply.", "<EMAIL_ADDRESS>", "EMAIL_ADDRESS"),
+        ("My email is alice@company.com please reply.", "<EMAIL_ADDRESS>", "EMAIL_ADDRESS"),
         ("Call me at +1-555-123-4567 tomorrow.", "<PHONE_NUMBER>", "PHONE_NUMBER"),
         ("Pay with card 4532-0151-1283-0366 now.", "<CREDIT_CARD>", "CREDIT_CARD"),
         ("Connect to 192.168.1.100 port 22.", "<IP_ADDRESS>", "IP_ADDRESS"),
@@ -84,7 +84,7 @@ def test_pii_entity_redaction(redactor, input_text, expected_placeholder, entity
 
 def test_person_redaction(redactor):
     """Verify person names are redacted."""
-    text = "My name is John Doe and I work at Ericsson."
+    text = "My name is John Doe and I work at Acme Corp."
     redacted, count = redactor.redact(text)
     assert count >= 1
     assert "<PERSON>" in redacted
@@ -161,7 +161,7 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
     client = TestClient(app, raise_server_exceptions=False)
 
     sensitive_content = (
-        "Hello, my email is john.doe@ericsson.com, "
+        "Hello, my email is john.doe@company.com, "
         "my phone is +1-555-123-4567, and employee ID is EMP-12345."
     )
 
@@ -191,7 +191,7 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
     received_text = user_msg["content"]
 
     # Raw secrets must NOT be present
-    assert "john.doe@ericsson.com" not in received_text
+    assert "john.doe@company.com" not in received_text
     assert "+1-555-123-4567" not in received_text
     assert "EMP-12345" not in received_text
 

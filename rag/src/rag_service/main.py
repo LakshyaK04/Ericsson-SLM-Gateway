@@ -69,8 +69,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Ericsson RAG Service",
-    description="Multi-strategy document chunking, ChromaDB vector store, and neural cross-encoder re-ranking",
+    title="Local RAG Service",
+    description="Multi-strategy document chunking, ChromaDB vector store, BM25 hybrid search, and neural cross-encoder re-ranking",
     version="0.1.0",
     lifespan=lifespan,
 )

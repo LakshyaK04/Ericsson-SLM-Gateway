@@ -8,7 +8,7 @@
 | Recall Rate | 100.00% |
 | False-Positive Rate | 0.00% |
 | Overall Accuracy | 100.00% |
-| Avg Redaction Latency | 38.7 ms |
+| Avg Redaction Latency | 37.5 ms |
 
 ## Per-Entity Recall
 
