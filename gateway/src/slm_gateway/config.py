@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ROUTER_THRESHOLD: float = 0.55
     INTENTS_FILE: Optional[str] = None
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
+    PROJECT_CODENAMES: Optional[str] = None  # Comma-separated deny-list, e.g. "Phoenix,Titan,Aurora"
     RAG_SERVICE_URL: str = "http://localhost:8001"
     RAG_TIMEOUT_SECONDS: float = 30.0
     RAG_DEFAULT_STRATEGY: str = "structure"

@@ -60,6 +60,8 @@ def redactor():
         ("Connect to 192.168.1.100 port 22.", "<IP_ADDRESS>", "IP_ADDRESS"),
         ("Employee EMP-12345 reported for duty.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
         ("Employee EMP-9876543 submitted the report.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
+        ("Project Phoenix is scheduled for delivery next quarter.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
+        ("The Titan initiative has been approved by the board.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
     ],
 )
 def test_pii_entity_redaction(redactor, input_text, expected_placeholder, entity_type):

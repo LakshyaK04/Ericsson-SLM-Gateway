@@ -6,6 +6,7 @@ and provides configurable fail-closed / fail-open behavior.
 """
 
 import logging
+import re
 from typing import List, Optional, Tuple
 
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
@@ -14,6 +15,9 @@ from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
 from .config import Settings, settings
+
+# Default project codenames to redact (configurable via PROJECT_CODENAMES env var)
+DEFAULT_PROJECT_CODENAMES = ["Phoenix", "Titan", "Aurora", "Nebula", "Valkyrie"]
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,7 @@ DEFAULT_ENTITIES = [
     "CREDIT_CARD",
     "IP_ADDRESS",
     "EMPLOYEE_ID",
+    "PROJECT_CODENAME",
 ]
 
 
@@ -88,6 +93,29 @@ class PIIRedactor:
                 context=["phone", "call", "mobile", "cell", "tel", "contact"],
             )
             self.analyzer.registry.add_recognizer(phone_recognizer)
+
+            # Custom Recognizer 3: PROJECT_CODENAME deny-list (configurable via env)
+            codenames = getattr(self.config, "PROJECT_CODENAMES", None)
+            if codenames:
+                codename_list = [c.strip() for c in codenames.split(",") if c.strip()]
+            else:
+                codename_list = list(DEFAULT_PROJECT_CODENAMES)
+
+            if codename_list:
+                # Build regex pattern from deny-list: \b(Phoenix|Titan|Aurora|...)\b
+                escaped = [re.escape(name) for name in codename_list]
+                codename_pattern = Pattern(
+                    name="project_codename_pattern",
+                    regex=r"\b(" + "|".join(escaped) + r")\b",
+                    score=0.85,
+                )
+                codename_recognizer = PatternRecognizer(
+                    supported_entity="PROJECT_CODENAME",
+                    patterns=[codename_pattern],
+                    context=["project", "codename", "program", "initiative", "operation"],
+                )
+                self.analyzer.registry.add_recognizer(codename_recognizer)
+                logger.info("Registered PROJECT_CODENAME deny-list recognizer with %d codenames.", len(codename_list))
 
             logger.info("PIIRedactor initialized successfully with %d entities.", len(self.supported_entities))
         except Exception as e:
