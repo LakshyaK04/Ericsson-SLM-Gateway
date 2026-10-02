@@ -201,3 +201,40 @@ def test_chat_completions_bypass_router_header(client):
     }
 
 
+def test_gateway_api_key_enforcement(client, monkeypatch):
+    """When GATEWAY_API_KEY is configured, enforce Bearer authentication."""
+    monkeypatch.setattr(settings, "GATEWAY_API_KEY", "secret-test-key")
+
+    payload = {"messages": [{"role": "user", "content": "Hello"}]}
+
+    # 1. Missing header -> 401
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 401
+    assert "error" in resp.json()
+    assert "Expected 'Bearer <key>'" in resp.json()["error"]["message"]
+
+    # 2. Invalid key -> 401
+    resp = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer wrong-key"},
+    )
+    assert resp.status_code == 401
+    assert "Incorrect API key" in resp.json()["error"]["message"]
+
+    # 3. Valid key -> 200
+    resp = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer secret-test-key"},
+    )
+    assert resp.status_code == 200
+
+    # 4. Check /v1/models route auth
+    resp = client.get("/v1/models", headers={"Authorization": "Bearer secret-test-key"})
+    assert resp.status_code == 200
+    resp_no_auth = client.get("/v1/models")
+    assert resp_no_auth.status_code == 401
+
+
+

@@ -190,8 +190,37 @@ async def ready():
 # OpenAI-Compatible API Routes
 # ============================================================
 
+def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
+    """Validate Bearer token if GATEWAY_API_KEY is configured per section 4."""
+    if not settings.GATEWAY_API_KEY:
+        return
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": {
+                    "message": "Missing or invalid Authorization header. Expected 'Bearer <key>'.",
+                    "type": "invalid_request_error",
+                    "code": 401,
+                }
+            },
+        )
+    token = authorization.split("Bearer ", 1)[1].strip()
+    if token != settings.GATEWAY_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": {
+                    "message": "Incorrect API key provided.",
+                    "type": "invalid_request_error",
+                    "code": 401,
+                }
+            },
+        )
+
+
 @app.get("/v1/models", response_model=ModelListResponse)
-async def list_models():
+async def list_models(_auth: None = Depends(verify_api_key)):
     """Return loaded model in OpenAI list format."""
     model_name = backend.get_model_name() if backend else settings.MODEL_ID
     return ModelListResponse(
@@ -209,6 +238,7 @@ async def list_models():
 async def chat_completions(
     request: ChatCompletionRequest,
     x_bypass_router: Optional[str] = Header(None, alias="X-Bypass-Router"),
+    _auth: None = Depends(verify_api_key),
 ):
     """Generate chat completions conforming to the OpenAI API specification.
 

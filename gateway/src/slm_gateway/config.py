@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+    GATEWAY_API_KEY: Optional[str] = None  # Optional Bearer key enforcement per spec
 
     # LLM Backend
     BACKEND: Literal["hf_local", "openai_compatible"] = "hf_local"
