@@ -78,8 +78,8 @@ def demo_standard_chat(gateway_url: str):
 def demo_pii_redaction(gateway_url: str):
     print_header("PII Masking & Privacy Protection", 3)
     prompt = (
-        "Hello, I am Alice Smith (EMP-84920). My contact is alice.smith@ericsson.com "
-        "or +46-8-555-1234. I work at the headquarters in Stockholm."
+        "Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. My contact is "
+        "alice.smith@ericsson.com or +46-8-555-1234. I work at the headquarters in Stockholm."
     )
     print("[*] Original Inbound User Query:")
     print(f"    \"{prompt}\"")

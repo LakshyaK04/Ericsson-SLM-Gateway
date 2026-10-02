@@ -59,13 +59,13 @@ curl -s -X POST http://localhost:8000/v1/chat/completions \
   -d '{
     "messages": [{
       "role": "user",
-      "content": "Hello, I am Alice Smith (EMP-84920). My email is alice.smith@ericsson.com and phone is +46-8-555-1234. I work at the headquarters in Stockholm."
+      "content": "Hello, I am Alice Smith (EMP-84920) working on Project Phoenix. My email is alice.smith@ericsson.com and phone is +46-8-555-1234. I work at the headquarters in Stockholm."
     }],
     "max_tokens": 64
   }'
 ```
 **Talking Point**:
-> *"Notice that before Phi-3 sees the prompt, Presidio masks Alice Smith as `<PERSON>`, the email as `<EMAIL_ADDRESS>`, the phone number as `<PHONE_NUMBER>`, and our custom employee ID regex as `<EMPLOYEE_ID>`. The response metadata confirms `x_pii: {"redactions": 4}`. Notice also that 'Stockholm' remains unmasked: we deliberately excluded `LOCATION` and `DATE_TIME` so factual geographical queries aren't mutilated."*
+> *"Notice that before Phi-3 sees the prompt, Presidio masks Alice Smith as `<PERSON>`, the email as `<EMAIL_ADDRESS>`, the phone number as `<PHONE_NUMBER>`, our custom employee ID regex as `<EMPLOYEE_ID>`, and our configurable project deny-list as `<PROJECT_CODENAME>`. The response metadata confirms `x_pii: {"redactions": 5}`. Notice also that 'Stockholm' remains unmasked: we deliberately excluded `LOCATION` and `DATE_TIME` so factual geographical queries aren't mutilated."*
 
 ---
 
