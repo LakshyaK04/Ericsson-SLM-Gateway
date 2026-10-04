@@ -6,10 +6,10 @@ The **SLM Gateway** is a lightweight API gateway and inference router that wraps
 
 ## Features
 
-- **OpenAI-Compatible `/v1/chat/completions`**: Seamlessly integrates with the official `openai` Python SDK or any OpenAI-compatible client.
+- **OpenAI-Compatible `/v1/chat/completions`**: Integrates directly with the official `openai` Python SDK or any OpenAI-compatible client.
 - **In-Process Model Serving (`hf_local`)**: Loads `microsoft/Phi-3-mini-4k-instruct` in 4-bit NF4 quantization via `bitsandbytes`, guarded by an async semaphore for single-GPU stability.
 - **Client-Side PII Masking**: Microsoft Presidio analyzer with custom `EMPLOYEE_ID` recognizer and fail-closed privacy policy. Geographic names (`LOCATION`) and dates (`DATE_TIME`) are preserved to prevent query corruption.
-- **Semantic Intent Router**: Classifies queries across 3 intents (`general`, `technical`, `rag`) in ~12ms using `BAAI/bge-small-en-v1.5` embeddings.
+- **Semantic Intent Router**: Classifies queries across 3 intents (`general`, `technical`, `rag`) in ~12.8ms using `BAAI/bge-small-en-v1.5` embeddings.
 - **Loop-Safe RAG Delegation**: Routes document questions to the RAG service and accepts generation callbacks safely using `X-Bypass-Router: true`.
 
 ---

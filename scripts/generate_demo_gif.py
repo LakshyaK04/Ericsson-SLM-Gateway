@@ -52,13 +52,13 @@ frames_data = [
         "badge": "ROUTER",
         "badge_color": accent_cyan,
         "lines": [
-            ("MiniLM Embeddings + Threshold Classifier (Latency: ~12ms):", accent_cyan),
+            ("BGE Embeddings + Threshold Classifier (Latency: ~12.8ms):", accent_cyan),
             ("", text_main),
             ("Query intent: Technical domain query with architectural context", text_muted),
             ("Cosine similarity to reference vectors: 0.884", accent_amber),
             ("Routing Decision: [slm-local] (Phi-3 Mini 4K Instruct)", accent_green),
             ("", text_main),
-            ("Cloud fallback bypassed -> 100% Zero Data Egress Guaranteed", accent_green),
+            ("Cloud fallback bypassed -> On-device execution maintained", accent_green),
         ]
     },
     {

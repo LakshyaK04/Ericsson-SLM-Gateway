@@ -1,6 +1,6 @@
 # Learning Notes
 
-This document records what was built in each phase, the design decisions made, and questions a mentor might ask. It is updated at the end of every phase.
+This document records what was built in each phase, the design decisions made, and technical questions on system architecture. It is updated at the end of every phase.
 
 ---
 
@@ -31,7 +31,7 @@ All imports were converted from the old `src.phi3_project.xxx` absolute paths an
 - **One chunking file per strategy** instead of everything in one file, because the plan explicitly asks for `chunking/ {base.py, character.py, structure.py, semantic.py}` and each strategy is independent, making it easier to test and compare.
 - **Kept FAISS for now** even though the plan mentions ChromaDB. We will switch in Phase 4 when building the full RAG service endpoints. Changing too many things in one phase risks breaking the working tests.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why not just keep everything in one package?**
 A: The build plan requires two services that talk over HTTP. Separate packages make the boundary explicit — the gateway can't accidentally import RAG internals. It also means each service gets its own Dockerfile and can scale independently.
@@ -84,7 +84,7 @@ We wired these into `main.py` with FastAPI lifespan model loading, `/health` and
 - **OpenAI Compatible backend abstraction** so developers without a dedicated CUDA GPU can develop and test against external endpoints (or vLLM/Ollama) with a single environment flag `BACKEND=openai_compatible`.
 - **Standardized OpenAI error shapes** so client libraries like the official `openai` Python SDK handle errors (such as 401 Unauthorized or 422 Validation Error) gracefully as standard API errors.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why do we need `asyncio.to_thread` and an `asyncio.Semaphore(1)` around generation?**
 A: PyTorch's `model.generate()` is a blocking synchronous call. Without `asyncio.to_thread`, running it would block the Python event loop, causing all concurrent requests (including `/health` and `/ready` probes) to freeze. The semaphore of size 1 ensures that multiple requests don't attempt simultaneous generation on a single GPU, avoiding CUDA Out-of-Memory crashes.
@@ -149,13 +149,13 @@ We created an 18-test suite in `gateway/tests/test_pii.py` covering table-driven
 - **Fail-closed default** to prevent silent data exfiltration if the PII service crashes or spaCy encounters an unhandled tokenization error.
 - **Sanitizing only `user` messages** to preserve system prompts and instructions while guaranteeing privacy on user-provided inputs.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why did we explicitly exclude `LOCATION` and `DATE_TIME` from the entity list?**
 A: Off-the-shelf NER recognizers have high false-positive rates on common geographical names and temporal expressions. If a user asks "What is the capital of Germany?", redacting Germany into `<LOCATION>` prevents the model from knowing which country was asked about. Excluding them protects semantic meaning for both intent routing and answer generation.
 
 **Q2: What is the difference between fail-closed and fail-open in PII redaction?**
-A: In fail-closed mode (`PII_FAIL_MODE=closed`, default), any unhandled exception in Presidio causes the gateway to halt and return an HTTP 500 error, guaranteeing that raw sensitive text is never sent to the LLM backend. In fail-open mode, errors are logged and the raw text is passed through, prioritizing system uptime over absolute data privacy.
+A: In fail-closed mode (`PII_FAIL_MODE=closed`, default), any unhandled exception in Presidio causes the gateway to halt and return an HTTP 500 error, guaranteeing that raw sensitive text is never sent to the LLM backend. In fail-open mode, errors are logged and the raw text is passed through, prioritizing system uptime over strict data redaction.
 
 **Q3: Why use typed placeholders like `<EMAIL_ADDRESS>` instead of simple masking like `[REDACTED]` or `***`?**
 A: Typed placeholders preserve the grammatical role and category of the redacted entity. The LLM can still infer that the user provided an email address or employee identifier and respond appropriately (e.g. "I have noted your employee ID"), without ever seeing the actual private identifier.
@@ -212,12 +212,12 @@ We built an evaluation pipeline in `eval/router_eval.py` & `eval/datasets/router
 
 ### Why we did it this way
 
-- **`BAAI/bge-small-en-v1.5` over MiniLM or frontier models** because it offers state-of-the-art embedding quality on retrieval and clustering benchmarks in a compact 133MB footprint, executing inference in ~40-60ms on CPU without consuming GPU VRAM.
+- **`BAAI/bge-small-en-v1.5` over alternatives (such as `all-MiniLM-L6-v2`) or cloud APIs** because it offers high embedding quality on retrieval benchmarks in a compact 133MB footprint, executing inference in ~40-60ms on CPU without consuming GPU VRAM.
 - **Top-3 similarity averaging instead of 1-NN** because 1-NN is fragile to incidental word overlap. Top-3 averaging requires consistent semantic affinity across multiple diverse exemplars.
 - **Precomputed embeddings at startup** so request classification only requires encoding a single query string and doing a fast matrix-vector dot product (`cosine_similarity`).
 - **Automated zero-leakage validator in evaluation** ensuring evaluation scores reflect true generalization to unseen phrasing rather than memorized sentences.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why use semantic embedding similarity instead of an LLM prompt or an SVM/logistic regression classifier for intent routing?**
 A: An LLM prompt adds 500-1000ms of autoregressive generation latency and consumes precious VRAM/GPU resources. A fine-tuned classifier requires retraining whenever new intents or examples are added. Embedding similarity with `bge-small` takes ~50ms on CPU, requires zero GPU memory, and allows updating the intent bank instantly by simply editing `intents.yaml` without retraining.
@@ -296,7 +296,7 @@ We verified the service with 15 passing tests (`test_chunking.py`, `test_parsers
 - **Snapping character chunk boundaries to whitespace** preventing split words, truncated variable names, or damaged acronyms at chunk edges.
 - **Failing early on empty or image-only PDFs** informing users immediately that OCR is not supported rather than silently creating an empty document index.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why do we use a two-stage retrieval pipeline (dense search + cross-encoder) instead of returning top dense search matches directly?**
 A: Bi-encoders map query and document independently to fixed vectors, meaning words in the query cannot directly attend to words in the passage. Dense search is very fast for narrowing down thousands of chunks to 20 candidates. The cross-encoder (`bge-reranker-base`) feeds query and passage together through deep cross-attention, capturing subtle syntactic relationships and eliminating false-positive dense matches.
@@ -428,7 +428,7 @@ We integrated the SLM Gateway (port 8000) and the RAG Service (port 8001) into a
    - Asynchronous HTTP client checking RAG index status via `GET /documents` (`has_indexed_documents()`).
    - Routes queries classified as `rag` intent through `RAGClient.generate_answer()`.
    - Enriches the standard OpenAI response with `x_sources`, listing chunk IDs, document names, page numbers, dense scores, and re-ranking scores.
-   - Implements graceful fallback: if 0 documents are indexed or the RAG service is unreachable/timed out, the Gateway falls back seamlessly to the local model, injecting an explanatory warning into `x_routing["warning"]` while keeping `x_sources=None`.
+   - Implements graceful fallback: if 0 documents are indexed or the RAG service is unreachable/timed out, the Gateway falls back directly to the local model, injecting an explanatory warning into `x_routing["warning"]` while keeping `x_sources=None`.
 
 3. **Loop Prevention & Architectural Cleanliness**:
    - The Gateway checks `X-Bypass-Router: true`. When present, the Intent Router is bypassed entirely, routing directly to the local model (`hf_local`). This eliminates circular dependency loops (User -> Gateway -> RAG -> Gateway -> RAG...).
@@ -451,7 +451,7 @@ We integrated the SLM Gateway (port 8000) and the RAG Service (port 8001) into a
 - **Index-Aware Fallback:** Rather than throwing an internal 500 error or returning empty context when a user asks a document-related question on a freshly deployed instance with zero uploaded documents, the Gateway transparently falls back to local knowledge and warns the caller in `x_routing["warning"]`.
 - **Numbered In-Context Citations:** Numbered brackets `[1]` provide an unambiguous notation for small language models (Phi-3 Mini) to map claims directly back to specific document sources and page numbers.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: How does the architecture prevent infinite recursive loops between the Gateway and RAG service?**
 A: When a user query routes to `rag`, the Gateway calls the RAG service's `POST /answer` endpoint. The RAG service performs two-stage retrieval, prepares the grounded prompt, and calls the Gateway's `POST /v1/chat/completions` endpoint with `X-Bypass-Router: true`. The Gateway detects this header and skips intent classification entirely, routing immediately to `hf_local`. Without this bypass, the Gateway router might classify the augmented context prompt as `rag` again, initiating an infinite HTTP loop.
@@ -502,7 +502,7 @@ We packaged, documented, and automated the complete multi-service stack for turn
    - Updated service-level documentation: `gateway/README.md`, `rag/README.md`, and top-level `README.md`.
 
 3. **5-Minute Live Demo & Automation (`docs/DEMO_SCRIPT.md`, `scripts/demo.py`)**:
-   - `docs/DEMO_SCRIPT.md`: Step-by-step scripted narrative covering 6 scenes with exact `curl` payloads, expected JSON outputs, and mentor talking points.
+   - `docs/DEMO_SCRIPT.md`: Step-by-step scripted narrative covering 6 scenes with exact `curl` payloads, expected JSON outputs, and architecture talking points.
    - `scripts/demo.py`: Cross-platform interactive and automated CLI tool executing the entire live demo flow or displaying the empirical benchmark table (`--benchmark-only`).
    - Transparently documented that GPU container execution is untested in this sandboxed environment, providing exact verification commands for physical host machines.
 
@@ -514,17 +514,17 @@ We packaged, documented, and automated the complete multi-service stack for turn
 | **Healthcheck Dependency (`service_healthy`)** | A Docker Compose configuration ensuring a dependent container only starts after its upstream dependency passes internal health verification probes. |
 | **Volume Persistence** | Storing vector databases and downloaded model weights in named Docker volumes so data survives container recreation without redownloading multi-gigabyte models. |
 | **Provenance Citation** | Explicitly mapping each claim in an LLM-synthesized answer back to the originating source file, page number, and chunk ID. |
-| **Scripted Demonstration** | A reproducible, timed presentation framework allowing developers to showcase core capabilities with deterministic inputs and clear mentor discussion topics. |
+| **Scripted Demonstration** | A reproducible, timed presentation framework allowing developers to showcase core capabilities with deterministic inputs and clear architectural discussion topics. |
 
 ### Why we did it this way
 
-- **Security Compliance with Non-Root Execution:** Enterprise environments and Kubernetes clusters enforce `runAsNonRoot: true`. Baking an unprivileged `appuser` directly into the Dockerfiles ensures seamless compliance.
+- **Security Compliance with Non-Root Execution:** Enterprise environments and Kubernetes clusters enforce `runAsNonRoot: true`. Baking an unprivileged `appuser` directly into the Dockerfiles ensures container compliance without ad-hoc overrides.
 - **Boot Ordering via `service_healthy`:** Simply specifying `depends_on: [rag]` only waits for the container process to spawn, not for model weights and ChromaDB to initialize. Using `condition: service_healthy` guarantees that the RAG service is fully initialized before the Gateway accepts inbound traffic.
 - **Dedicated Volume for HuggingFace Cache:** Downloading Phi-3 Mini (~2.6GB) and BGE models on every container launch wastefully exhausts bandwidth and creates startup delays. Mounting `hf-cache` preserves downloaded models across restarts.
 - **Cross-Platform Python Demo Script:** Instead of relying exclusively on Unix bash scripts (`demo.sh`), `demo.py` runs natively across Windows, Linux, and macOS without shell dependencies.
 - **Honest Environmental Disclosure:** Adhering to Rule 2 of the Build Plan, we clearly documented that Docker GPU passthrough is untested in this sandboxed development container and provided exact instructions for running with `nvidia-container-toolkit`.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: Why is running containers as a non-root user critical for enterprise security?**
 A: By default, a process running as root inside a container shares the root UID (0) with the host kernel. If a vulnerability allows a container breakout, the attacker gains root control over the host system. Creating an unprivileged user (`appuser:10001`) ensures that even if an attacker compromises the Python process, their access remains tightly restricted inside the container namespace.
@@ -589,11 +589,11 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
 
 ### Why we did it this way
 
-- **Honest Limitations over Vague Promises:** Real enterprise systems have operational boundaries. Documenting that scanned PDFs require OCR and that in-process Phi-3 serializes requests demonstrates technical maturity and equips mentors with genuine engineering insights.
+- **Honest Limitations over Vague Promises:** Real enterprise systems have operational boundaries. Documenting that scanned PDFs require OCR and that in-process Phi-3 serializes requests demonstrates technical maturity and equips engineers with genuine operational insights.
 - **Fast vs. Slow Test Partitioning:** Running 80 tests in ~1 minute enables fast local TDD and CI pull-request checks without downloading 2.6GB of weights, while preserving full end-to-end integration tests in `@pytest.mark.slow`.
 - **Decoupled Architecture with HTTP Contracts:** The Gateway and RAG services communicate strictly over HTTP using standard REST interfaces. If the local Phi-3 backend becomes a bottleneck under high user volume, operators can transition to `BACKEND=openai_compatible` without modifying a single line of RAG code.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: What happens if an enterprise user uploads an image-only scanned PDF to the RAG service?**
 A: The RAG service's PDF parser (`pymupdf`) extracts zero text characters across all pages. The service intercepts this condition immediately and returns HTTP 400 Bad Request with: `"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.

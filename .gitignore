@@ -11,6 +11,7 @@ env/
 
 # Environment variables / secrets
 .env
+.env.*
 !.env.example
 
 # IDE
@@ -29,14 +30,18 @@ htmlcov/
 .cache/
 huggingface/
 models/
+checkpoints/
 *.gguf
 *.safetensors
 *.pt
 *.bin
+*.onnx
 
 # ChromaDB persistence
 chroma_data/
 chroma_db/
+chroma/
+.chroma/
 data/
 *.sqlite3
 

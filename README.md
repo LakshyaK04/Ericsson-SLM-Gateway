@@ -1,6 +1,6 @@
 # Local GenAI Stack: SLM Gateway & Hybrid RAG Pipeline
 
-A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), ensuring zero cloud data egress and complete data privacy.
+A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), ensuring on-device execution without cloud data egress.
 
 ![Local GenAI Stack Demo](assets/demo.gif)
 *Illustrative animation of the request lifecycle.*
@@ -22,7 +22,7 @@ A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compati
                    PII Redaction (Presidio + Codename Deny-list)
                          │
                          ▼
-                  Semantic Router (MiniLM / BGE Embeddings)
+                  Semantic Router (BGE Embeddings)
                      /       \
                     /         \
               Normal query    RAG query
