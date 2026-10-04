@@ -24,11 +24,16 @@ jobs:
       - name: Set up Python 3.10
         run: uv python install 3.10
 
-      - name: Install dependencies
-        run: uv sync --all-groups
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-hf-
 
-      - name: Download spaCy en_core_web_sm model
-        run: uv run python -m spacy download en_core_web_sm
+      - name: Install dependencies
+        run: uv sync --all-packages --all-groups
 
       - name: Run Test Suite (Non-slow)
         run: uv run pytest gateway/tests rag/tests -m "not slow" -v --tb=short

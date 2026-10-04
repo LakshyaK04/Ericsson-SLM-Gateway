@@ -12,8 +12,9 @@ import logging
 import os
 from pathlib import Path
 
-# Prefer local Hugging Face cache to avoid DNS timeouts in offline / air-gapped environments
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
+# Prefer local Hugging Face cache to avoid DNS timeouts in offline / air-gapped environments (unless running in CI)
+if not os.environ.get("CI"):
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
 import re
 import sys
 import time
