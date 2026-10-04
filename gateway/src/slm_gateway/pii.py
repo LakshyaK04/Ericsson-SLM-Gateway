@@ -40,7 +40,7 @@ class PIIRedactionError(Exception):
 
 
 class PIIRedactor:
-    """PII Redaction engine with Presidio and custom enterprise recognizers."""
+    """PII Redaction engine with Presidio and custom entity recognizers."""
 
     def __init__(self, config: Optional[Settings] = None):
         self.config = config or settings
@@ -128,7 +128,7 @@ class PIIRedactor:
     def redact(self, text: str) -> Tuple[str, int]:
         """Redact PII from the given text.
 
-        WHY: In an enterprise setting, sensitive user data (names, emails, IDs) must
+        WHY: Sensitive user data (names, emails, IDs) must
         never reach the model or logs. We scan inbound prompts and replace entities with
         typed placeholders (e.g., <EMAIL_ADDRESS>) while preserving sentence structure.
 

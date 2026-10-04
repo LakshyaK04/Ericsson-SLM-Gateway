@@ -158,25 +158,29 @@ def demo_rag_pipeline(gateway_url: str, rag_url: str):
 
 
 def demo_chunking_comparison():
+    csv_file = Path(__file__).resolve().parent.parent / "eval" / "results" / "chunking_report.csv"
+    if not csv_file.exists():
+        print("[!] eval/results/chunking_report.csv not found. Run eval/chunking_eval.py first.")
+        return
+
+    import csv
+    with open(csv_file, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    print("\nEmpirical Chunking Strategy & Re-Ranking Results:")
+    print("(Tested on small synthetic set of 3 PDFs / 5 pages from scripts/create_eval_docs.py and 36 questions)\n")
+    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
+    print(f"| {'Strategy':<11} | {'Re-ranker':<9} | {'Total Chunks':<12} | {'Avg Length':<10} | {'Hit@1 (%)':<9} | {'Hit@3 (%)':<9} | {'MRR':<6} | {'Latency (ms)':<12} |")
+    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
+    for r in rows:
+        lat = f"{float(r['Avg Latency (ms)']):.1f} ms"
+        print(f"| {r['Strategy']:<11} | {r['Reranker']:<9} | {r['Total Chunks']:<12} | {r['Avg Length (chars)'] + ' ch':<10} | {float(r['Hit@1 (%)']):.2f}%{' ': <3}| {float(r['Hit@3 (%)']):.2f}%{' ': <3}| {float(r['MRR']):.4f} | {lat:<12} |")
+    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
     print("""
-Empirical Chunking Strategy & Re-Ranking Results:
-(Tested on small synthetic set of 3 PDFs / 5 pages from scripts/create_eval_docs.py and 36 questions)
-
-+-------------+-----------+--------------+------------+-----------+-----------+--------+--------------+
-| Strategy    | Re-ranker | Total Chunks | Avg Length | Hit@1 (%) | Hit@3 (%) | MRR    | Latency (ms) |
-+-------------+-----------+--------------+------------+-----------+-----------+--------+--------------+
-| character   | Off       | 16           | 422.1 ch   | 86.11%    | 97.22%    | 0.9028 | 11.6 ms      |
-| character   | On        | 16           | 422.1 ch   | 83.33%    | 97.22%    | 0.9028 | 152.2 ms     |
-| structure   | Off       | 10           | 621.0 ch   | 86.11%    | 94.44%    | 0.9028 | 9.8 ms       |
-| structure   | On        | 10           | 621.0 ch   | 100.00%   | 100.00%   | 1.0000 | 159.3 ms     |
-| semantic    | Off       | 16           | 387.2 ch   | 80.56%    | 94.44%    | 0.8611 | 10.1 ms      |
-| semantic    | On        | 16           | 387.2 ch   | 94.44%    | 97.22%    | 0.9583 | 166.9 ms     |
-+-------------+-----------+--------------+------------+-----------+-----------+--------+--------------+
-
 Observations:
-1. Re-ranking improved structure chunking (Hit@1: 86.1% -> 100.0%) and semantic chunking (Hit@1: 80.6% -> 94.4%).
-2. Re-ranking did not improve character chunking on Hit@1 (86.11% without vs 83.33% with).
-3. Re-ranking adds ~140-155ms cross-encoder inference latency per query.
+1. Re-ranking improved structure chunking (Hit@1: 94.44% -> 100.00%) and semantic chunking (Hit@1: 88.89% -> 94.44%).
+2. Re-ranking character chunking improved Hit@1 (+2.78 pp), but reduced Hit@3 (-2.78 pp).
+3. Re-ranking adds ~1,000-1,160 ms cross-encoder inference latency per query on CPU.
 """)
 
 

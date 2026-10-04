@@ -44,5 +44,8 @@ data/
 .DS_Store
 Thumbs.db
 
+# Private notes
+notes_private/
+
 # Explicitly track uv lockfile for reproducibility
 !uv.lock

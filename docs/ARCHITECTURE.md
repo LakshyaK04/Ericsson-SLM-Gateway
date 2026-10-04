@@ -59,11 +59,13 @@ graph TD
     
     subgraph RAG Pipeline
         direction TB
-        Search[BGE Dense Search: Top 20]
-        Store[(ChromaDB)]
-        Rerank[Cross-Encoder: Top 3]
-        Search --> Store
-        Store --> Rerank
+        BM25[BM25 Lexical Keyword Search]
+        Dense[BGE Dense Vector Search : ChromaDB]
+        RRF[Reciprocal Rank Fusion k=60]
+        Rerank[Cross-Encoder Re-Ranking: Top 3]
+        BM25 --> RRF
+        Dense --> RRF
+        RRF --> Rerank
     end
     
     RAG --> GroundedModel[Phi-3 Mini<br/>X-Bypass-Router: true]
@@ -79,13 +81,13 @@ graph TD
 2. **PII Masking**: The Gateway's Presidio pipeline intercepts incoming `user` messages, masking sensitive entities (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`, and custom `EMPLOYEE_ID`) into typed placeholders (e.g., `<EMAIL_ADDRESS>`). Location and date nouns are preserved.
 3. **Intent Classification**: The Intent Router embeds the query using `BAAI/bge-small-en-v1.5` and computes cosine similarity against exemplar sentences, classifying the query into `general`, `technical`, or `rag`.
 4. **Branch A — Normal Query (`general`, `technical`)**:
-   - The Gateway passes the prompt directly to the in-process `microsoft/Phi-3-mini-4k-instruct` model (4-bit NF4 quantization) guarded by an `asyncio.Semaphore(1)` to protect GPU memory.
-   - Returns standard OpenAI chat completion JSON.
+   - The Gateway passes the prompt directly to the in-process `microsoft/Phi-3-mini-4k-instruct` model (4-bit NF4 quantization) guarded by an `asyncio.Semaphore(1)` to serialize generation.
+   - Returns standard OpenAI chat completion JSON or SSE stream.
 5. **Branch B — RAG Query (`rag`)**:
    - The Gateway delegates the query to `POST http://rag:8001/answer`.
-   - **Document Ingestion (Background/Setup)**: PDFs and DOCX files are parsed, chunked via one of three strategies (`character`, `structure`, `semantic`), embedded with BGE-small, and stored in ChromaDB.
-   - **Dense Retrieval**: The query is embedded with BGE-small, retrieving the top 20 candidate chunks from ChromaDB.
-   - **Cross-Encoder Re-Ranking**: `BAAI/bge-reranker-base` re-ranks the 20 candidates and retains the top 3 chunks.
+   - **Document Ingestion (Background/Setup)**: PDFs and DOCX files are parsed, chunked via one of three strategies (`character`, `structure`, `semantic`), embedded with BGE-small, and stored in ChromaDB and BM25 index.
+   - **Hybrid Retrieval**: Candidate chunks are scored via BM25 lexical search and BGE dense vector cosine search, then fused using Reciprocal Rank Fusion (RRF, $k=60$).
+   - **Cross-Encoder Re-Ranking**: `BAAI/bge-reranker-base` re-ranks candidate chunks and retains the top 3 chunks.
    - **Grounded Answer Synthesis**: The top 3 chunks are formatted into numbered context brackets (`[1]`, `[2]`, `[3]`). The RAG service calls back to the Gateway `/v1/chat/completions` with the header `X-Bypass-Router: true`.
    - **Loop Prevention**: The Gateway detects `X-Bypass-Router: true`, skips intent routing, executes local Phi-3 generation directly, and returns the grounded answer with sources.
 

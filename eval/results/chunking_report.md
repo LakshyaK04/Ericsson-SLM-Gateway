@@ -8,12 +8,12 @@ This report evaluates three chunking strategies (`character`, `structure`, `sema
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | **Off** | 16 | 423.6 | 86.1% | 100.0% | 0.9213 | 16.9 |
-| `character` | **On** | 16 | 423.6 | 88.9% | 97.2% | 0.9306 | 2340.3 |
-| `structure` | **Off** | 10 | 623.6 | 94.4% | 100.0% | 0.9722 | 14.7 |
-| `structure` | **On** | 10 | 623.6 | 100.0% | 100.0% | 1.0000 | 5634.3 |
-| `semantic` | **Off** | 16 | 388.7 | 88.9% | 100.0% | 0.9352 | 114.9 |
-| `semantic` | **On** | 16 | 388.7 | 94.4% | 97.2% | 0.9583 | 4183.3 |
+| `character` | **Off** | 16 | 423.6 | 86.1% | 100.0% | 0.9213 | 16.0 |
+| `character` | **On** | 16 | 423.6 | 88.9% | 97.2% | 0.9306 | 1025.1 |
+| `structure` | **Off** | 10 | 623.6 | 94.4% | 100.0% | 0.9722 | 15.5 |
+| `structure` | **On** | 10 | 623.6 | 100.0% | 100.0% | 1.0000 | 1069.9 |
+| `semantic` | **Off** | 16 | 388.7 | 88.9% | 100.0% | 0.9352 | 15.9 |
+| `semantic` | **On** | 16 | 388.7 | 94.4% | 97.2% | 0.9583 | 1175.0 |
 
 ## 3. Chunking Profile & Granularity
 

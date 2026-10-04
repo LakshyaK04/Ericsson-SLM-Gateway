@@ -12,7 +12,7 @@ The **SLM Gateway** acts as the secure reverse proxy and ingestion gateway for l
 - **OpenAI Compatibility**: Drop-in replacement for OpenAI SDKs and tools (`chatcmpl-...` response envelopes, token usage tracking, and SSE streaming).
 - **In-Process Model Serving**: Serves `microsoft/Phi-3-mini-4k-instruct` in 4-bit NF4 quantization via HuggingFace Transformers and `bitsandbytes`.
 - **Fail-Closed PII Masking**: Identifies and masks personal identifiers (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`), custom enterprise IDs (`EMPLOYEE_ID`), and project codenames with typed placeholders.
-- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~13.3ms using `BAAI/bge-small-en-v1.5` embeddings.
+- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~12.8ms using `BAAI/bge-small-en-v1.5` embeddings.
 - **RAG Delegation**: Orchestrates grounded retrieval-augmented queries to the RAG microservice with automatic loop prevention (`X-Bypass-Router`) and fallback handling.
 
 ---
@@ -45,9 +45,10 @@ Creates a model completion for the provided chat messages.
   "stream": false
 }
 ```
-*Note: `stream=true` returns HTTP 400 Bad Request.*
+*Note: Set `"stream": true` to receive a Server-Sent Events (SSE) token stream conforming to the OpenAI chunk protocol.*
 
 #### Response Body Schema (OpenAI-Compatible + Namespaced Extensions)
+*(Illustrative example response)*
 ```json
 {
   "id": "chatcmpl-7d5a86d5beee4e6f",
@@ -73,7 +74,7 @@ Creates a model completion for the provided chat messages.
     "intent": "technical",
     "confidence": 0.7234,
     "route": "hf_local",
-    "latency_ms": 11.6
+    "latency_ms": 12.8
   },
   "x_pii": {
     "redactions": 0
@@ -95,8 +96,8 @@ Creates a model completion for the provided chat messages.
 Implemented in `slm_gateway.pii` using Microsoft Presidio and spaCy's `en_core_web_sm` pipeline.
 1. **Restricted Entity List**:
    - Standard: `PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`.
-   - **Explicitly Excluded**: `LOCATION` and `DATE_TIME`. Presidio's default location recognizer frequently flags common cities and countries, mutilating knowledge queries.
-2. **Custom Enterprise Recognizer**:
+   - **Explicitly Excluded**: `LOCATION` and `DATE_TIME`. Presidio's default location recognizer frequently flags common cities and countries, modifying knowledge queries unnecessarily.
+2. **Custom Recognizer**:
    - `EMPLOYEE_ID`: Regex recognizer matching corporate identity badges (`EMP-\d{5,7}`) with high pattern confidence (0.85).
 
 ### 3.2 Security Policy: Fail-Closed
@@ -123,7 +124,7 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 | **`rag`** | 16 | 93.8% | 93.8% | 93.8% |
 | **Overall** | **48** | **93.75% Accuracy (45/48)** | — | — |
 
-- **Mean Router Latency**: `11.57 ms` (P50: `9.20 ms`, P95: `29.03 ms`)
+- **Mean Router Latency**: `12.76 ms` (P50: `12.15 ms`, P95: `16.48 ms`) on CPU
 
 ---
 
@@ -131,13 +132,13 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 
 ### 5.1 `hf_local` (Default In-Process Backend)
 - **Model**: `microsoft/Phi-3-mini-4k-instruct`.
-- **Quantization**: 4-bit NormalFloat (NF4) via `bitsandbytes` with double quantization. Reduces GPU VRAM footprint from 7.6GB (FP16) to ~2.6GB.
-- **Concurrency Isolation**: PyTorch generation runs behind an `asyncio.Semaphore(1)` to ensure single-GPU serial execution without thread collisions or CUDA memory corruption.
+- **Quantization**: 4-bit NormalFloat (NF4) via `bitsandbytes` with double quantization. Reduces GPU VRAM footprint from ~7.6GB (FP16) to ~2.6GB.
+- **Concurrency Isolation**: PyTorch generation runs behind an `asyncio.Semaphore(1)` to ensure single-device serial execution without thread collisions or CUDA memory corruption.
 - **Context Management**: Context window constrained to 4096 tokens. Oldest conversational turns are truncated gracefully while preserving system instructions.
 
 ### 5.2 `openai_compatible` (Flexible Proxy Backend)
 - Directs queries to any external OpenAI-compatible inference engine (e.g., vLLM, Ollama, TGI, or mock servers) specified via `BACKEND_URL`.
-- Enables CPU-only development, unit testing without GPU requirements, and seamless migration to dedicated enterprise model clusters.
+- Enables CPU-only development, unit testing without GPU requirements, and migration to external model servers.
 
 ---
 

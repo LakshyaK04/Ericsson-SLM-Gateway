@@ -3,6 +3,7 @@
 A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), ensuring zero cloud data egress and complete data privacy.
 
 ![Local GenAI Stack Demo](assets/demo.gif)
+*Illustrative animation of the request lifecycle.*
 
 ---
 
@@ -57,7 +58,7 @@ A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compati
 graph TD
     Client([User / Client]) --> Gateway[FastAPI Gateway :8000]
     Gateway --> PII[PII Redaction: Fail-Closed]
-    PII --> Router[Semantic Router: ~13.3ms]
+    PII --> Router[Semantic Router: ~12.8ms]
     
     Router -->|Normal query: general / technical| LocalModel[Phi-3 Mini 4K Instruct]
     Router -->|RAG query| RAG[Hybrid RAG Pipeline :8001]
@@ -145,35 +146,35 @@ Evaluated across 36 ground-truth questions on a small synthetic corpus (3 PDFs /
 
 | Strategy | Re-ranker | Total Chunks | Avg Length | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | Off | 16 | 423.6 ch | 86.11% | 100.00% | 0.9213 | 16.9 |
-| `character` | On | 16 | 423.6 ch | 88.89% | 97.22% | 0.9306 | 2340.3 |
-| `structure` | Off | 10 | 623.6 ch | 94.44% | 100.00% | 0.9722 | 14.7 |
-| **`structure`** | **On** | **10** | **623.6 ch** | **100.00%** | **100.00%** | **1.0000** | **5634.3** |
-| `semantic` | Off | 16 | 388.7 ch | 88.89% | 100.00% | 0.9352 | 114.9 |
-| **`semantic`** | **On** | **16** | **388.7 ch** | **94.44%** | **97.22%** | **0.9583** | **4183.3** |
+| `character` | Off | 16 | 423.6 ch | 86.11% | 100.00% | 0.9213 | 16.0 |
+| `character` | On | 16 | 423.6 ch | 88.89% | 97.22% | 0.9306 | 1025.1 |
+| `structure` | Off | 10 | 623.6 ch | 94.44% | 100.00% | 0.9722 | 15.5 |
+| **`structure`** | **On** | **10** | **623.6 ch** | **100.00%** | **100.00%** | **1.0000** | **1069.9** |
+| `semantic` | Off | 16 | 388.7 ch | 88.89% | 100.00% | 0.9352 | 15.9 |
+| **`semantic`** | **On** | **16** | **388.7 ch** | **94.44%** | **97.22%** | **0.9583** | **1175.0** |
 
 *Takeaways*:
-- Cross-encoder re-ranking improved Hit@1 for structure (+5.56%) and semantic (+5.55%).
-- Re-ranking character chunking improved Hit@1 from 86.1% to 88.9%, but slightly reduced Hit@3, possibly because severed sentences lack full context for cross-attention.
-- Dense search provides ~15-20ms lookup, while cross-encoder inference on CPU adds noticeable latency without GPU acceleration.
+- Cross-encoder re-ranking improved Hit@1 for structure (+5.56 pp) and semantic (+5.55 pp).
+- Re-ranking character chunking improved Hit@1 (+2.78 pp), but reduced Hit@3 (-2.78 pp).
+- Dense search lookup alone averaged ~15-16 ms on CPU; adding neural cross-encoder re-ranking on CPU added ~1,000-1,160 ms per query (measured on CPU without GPU acceleration).
 
 ### 3.2 Hybrid Retrieval & Reciprocal Rank Fusion (RRF)
 Evaluated across 24 test queries (12 exact keyword/acronym + 12 conceptual paraphrase) over 4 technical documents (`eval/datasets/hybrid_eval.jsonl`):
 
-| Configuration | Re-Ranker | RRF $k$ | Keyword Hit@1 | Conceptual Hit@1 | Overall Hit@1 | Overall Hit@3 | MRR |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **BM25 Lexical Only** | Off | — | **100.0%** | 41.7% | 70.83% | 75.00% | 0.7292 |
-| **BGE Dense Vector Only** | Off | — | 91.7% | 33.3% | 62.50% | 75.00% | 0.6806 |
-| **Hybrid (BM25 + Dense RRF)** | Off | 60 | 91.7% | **41.7%** | 66.67% | 75.00% | 0.7083 |
-| **Hybrid + Cross-Encoder** | **On** | **60** | **100.0%** | 25.0% | 62.50% | **79.17%** | 0.7014 |
+| Configuration | Re-Ranker | RRF $k$ | Keyword Hit@1 | Conceptual Hit@1 | Overall Hit@1 | Overall Hit@3 | MRR | Latency (ms) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **BM25 Lexical Only** | Off | — | **100.0%** | **41.7%** | **70.83%** | 75.00% | **0.7292** | 0.2 |
+| **BGE Dense Vector Only** | Off | — | 91.7% | 33.3% | 62.50% | 75.00% | 0.6806 | 17.4 |
+| **Hybrid (BM25 + Dense RRF)** | Off | 60 | 91.7% | **41.7%** | 66.67% | 75.00% | 0.7083 | 17.6 |
+| **Hybrid + Cross-Encoder** | **On** | **60** | **100.0%** | 25.0% | 62.50% | **79.17%** | 0.7014 | 1735.4 |
 
 *Takeaways*:
-- Lexical BM25 excels at exact keyword and acronym queries (`100% Hit@1`) but degrades on conceptual paraphrasing.
-- Dense embeddings capture semantic intent without exact vocabulary overlap.
-- Hybrid fusion with Reciprocal Rank Fusion ($k=60$) balances both modalities, ensuring zero keyword regressions.
+- On this 24-query set, BM25 alone matched or beat the hybrid configurations on Hit@1 (70.83% vs 66.67%) and MRR (0.7292 vs 0.7083).
+- Adding the `bge-reranker-base` cross-encoder raised Hit@3 by one query (75.0% to 79.17%), but lowered conceptual Hit@1 (41.7% to 25.0%) and overall Hit@1 (66.67% to 62.5%).
+- With 24 queries, one query represents approximately 4.17 pp, so these differences reflect shifts of only one or two queries and are not statistically conclusive.
 
 ### 3.3 Semantic Intent Router Accuracy
-Evaluated on 48 held-out synthetic queries with 0 training exemplar leakage (`eval/datasets/router_eval.jsonl`):
+Evaluated on 48 held-out synthetic queries written by the author with 0 training exemplar leakage (`eval/datasets/router_eval.jsonl`):
 
 | Intent | Support | Precision | Recall | F1-Score |
 |---|:---:|:---:|:---:|:---:|
@@ -182,13 +183,17 @@ Evaluated on 48 held-out synthetic queries with 0 training exemplar leakage (`ev
 | `rag` | 16 | 93.8% | 93.8% | 93.8% |
 | **Overall** | **48** | **93.75% Accuracy (45/48)** | — | — |
 
-*Operating threshold: `0.55`. Mean classification latency: `13.34 ms` (P50: `13.31 ms`, P95: `16.13 ms`).*
+*Operating threshold: `0.55`. Mean classification latency: `12.76 ms` (P50: `12.15 ms`, P95: `16.48 ms`) on CPU.*
+
+### 3.4 Findings and Caveats
+- **Evaluation sets are small and author-written**: The chunking evaluation used 3 PDFs / 5 pages and 36 questions; the hybrid evaluation used 4 technical documents / 16 chunks and 24 queries; the router evaluation used 48 queries.
+- **Hybrid retrieval vs. BM25**: On this small test set, hybrid fusion did not clearly outperform BM25 alone on Hit@1 or MRR. A larger, diverse technical corpus is required to determine whether hybrid retrieval provides a net benefit.
+- **Hardware context**: All retrieval, embedding, and cross-encoder benchmarks were executed on CPU.
 
 ---
 
 ## 4. Documentation & Architecture Reference
-- [docs/RESUME_PORTFOLIO.md](docs/RESUME_PORTFOLIO.md): **Resume bullet points, quantifiable metrics, and technical interview Q&A guide.**
-- [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md): Operational boundaries and production trade-offs catalog.
+- [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md): Operational boundaries and trade-offs catalog.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): Architecture diagram and request flow.
 - [docs/SOLUTION_GATEWAY.md](docs/SOLUTION_GATEWAY.md): Gateway design, API spec, and limitations.
 - [docs/SOLUTION_RAG.md](docs/SOLUTION_RAG.md): RAG design, chunking strategies, and limitations.

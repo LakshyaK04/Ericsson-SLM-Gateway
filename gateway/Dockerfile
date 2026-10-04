@@ -1,7 +1,7 @@
 # ==============================================================================
 # SLM Gateway Dockerfile
 #
-# Enterprise Container Specification:
+# Container Specification:
 # - Pinned Python 3.10 slim base image
 # - Non-root execution (appuser:10001) for container hardening
 # - Healthcheck on /health endpoint

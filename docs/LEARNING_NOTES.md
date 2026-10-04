@@ -355,12 +355,12 @@ We built the empirical chunking strategy and re-ranking evaluation framework to 
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | **Off** | 16 | 422.1 | 86.11% | 97.22% | 0.9028 | 11.6 |
-| `character` | **On** | 16 | 422.1 | 83.33% | 97.22% | 0.9028 | 152.2 |
-| `structure` | **Off** | 10 | 621.0 | 86.11% | 94.44% | 0.9028 | 9.8 |
-| `structure` | **On** | 10 | 621.0 | **100.00%** | **100.00%** | **1.0000** | 159.3 |
-| `semantic` | **Off** | 16 | 387.2 | 80.56% | 94.44% | 0.8611 | 10.1 |
-| `semantic` | **On** | 16 | 387.2 | **94.44%** | **97.22%** | **0.9583** | 166.9 |
+| `character` | **Off** | 16 | 423.6 | 86.11% | 100.00% | 0.9213 | 16.0 |
+| `character` | **On** | 16 | 423.6 | 88.89% | 97.22% | 0.9306 | 1025.1 |
+| `structure` | **Off** | 10 | 623.6 | 94.44% | 100.00% | 0.9722 | 15.5 |
+| `structure` | **On** | 10 | 623.6 | **100.00%** | **100.00%** | **1.0000** | 1069.9 |
+| `semantic` | **Off** | 16 | 388.7 | 88.89% | 100.00% | 0.9352 | 15.9 |
+| `semantic` | **On** | 16 | 388.7 | **94.44%** | **97.22%** | **0.9583** | 1175.0 |
 
 ### Glossary
 
@@ -370,25 +370,25 @@ We built the empirical chunking strategy and re-ranking evaluation framework to 
 | **Mean Reciprocal Rank (MRR)** | The average of the reciprocal ranks of the first relevant chunk ($1/\text{rank}$) across all queries. If the relevant chunk is at rank 1, score is 1.0; at rank 2, 0.5; at rank 3, 0.333. |
 | **Ground-Truth Expected Substring** | A verified verbatim text snippet from the document text that unequivocally confirms the retrieved chunk contains the specific answer to the question. |
 | **Granularity Trade-off** | The tension between small chunks (higher semantic purity, lower dense dilution) and large chunks (broader context, higher risk of irrelevant noise or token budget exhaustion). |
-| **Bi-Encoder vs Cross-Encoder Latency** | Bi-encoders perform single-vector dot products (~10ms for 20 candidates), whereas cross-encoders perform full transformer cross-attention for each query-candidate pair (~150-165ms on GPU). |
+| **Bi-Encoder vs Cross-Encoder Latency** | Bi-encoders perform single-vector dot products (~15-16ms for 20 candidates), whereas cross-encoders perform full transformer cross-attention for each query-candidate pair (~1,000-1,175ms on CPU). |
 
 ### Why we did it this way
 
 - **Exact Substring Verification over LLM Judging** because substring verification is 100% deterministic, reproducible, fast, and does not suffer from hallucinated evaluation scores or model biases.
-- **Evaluating with and without the re-ranker** directly demonstrates the empirical value added by the neural cross-encoder: on `structure` chunking, it boosted Hit@1 from 86.11% to 100.00%, and on `semantic` chunking, it boosted Hit@1 from 80.56% to 94.44% (+13.88% uplift).
-- **Evaluating on real technical telecom specifications (5G Core SBA, CNF Infrastructure)** rather than generic synthetic prose ensures that chunk boundaries are tested against real-world headings, bullet lists, numbered items, and dense acronyms.
-- **Using repository-local `data/chroma_eval` storage** ensures isolation from test runs and production data while avoiding Windows `%TEMP%` file-lock anomalies during rapid batch indexing.
+- **Evaluating with and without the re-ranker** directly demonstrates the empirical value added by the neural cross-encoder: on `structure` chunking, it boosted Hit@1 from 94.44% to 100.00% (+5.56 pp), and on `semantic` chunking, it boosted Hit@1 from 88.89% to 94.44% (+5.55 pp).
+- **Evaluating on real technical specifications (5G Core SBA, CNF Infrastructure)** rather than generic synthetic prose helps test chunk boundaries against headings, bullet lists, numbered items, and acronyms.
+- **Using repository-local `data/chroma_eval` storage** helps ensure isolation from test runs and main data while avoiding Windows `%TEMP%` file-lock anomalies during rapid batch indexing.
 
-### Mentor questions
+### Technical Questions
 
 **Q1: What did the evaluation reveal about the impact of the cross-encoder re-ranker across different chunking strategies?**
-A: Re-ranking provides a dramatic improvement in ranking precision for semantically coherent chunks: on `structure` chunking, Hit@1 jumped from 86.11% to 100.00% (MRR 1.0000), and on `semantic` chunking, Hit@1 increased from 80.56% to 94.44% (MRR from 0.8611 to 0.9583). On `character` chunking, however, the re-ranker showed negligible gain (83.33% vs 86.11%) because when sentences are severed mid-clause across fixed character boundaries, cross-attention cannot easily reconstruct missing context.
+A: Re-ranking provides an improvement in ranking precision for semantically coherent chunks: on `structure` chunking, Hit@1 reached 100.00% (MRR 1.0000), and on `semantic` chunking, Hit@1 increased from 88.89% to 94.44% (MRR from 0.9352 to 0.9583). On `character` chunking, Hit@1 shifted from 86.11% to 88.89% while Hit@3 dropped from 100% to 97.22%.
 
 **Q2: Why did `structure` chunking achieve the highest retrieval accuracy (100% Hit@1 with re-ranker) compared to `semantic` and `character`?**
-A: Structure chunking respects human author organization: section headers, numbered lists, and cohesive technical paragraphs remain intact within a single chunk (average length 621 characters). In contrast, character chunking slices across sentences, and semantic chunking split paragraphs into smaller 387-character fragments based on local cosine dips, occasionally separating a technical constraint from its introductory header.
+A: Structure chunking respects human author organization: section headers, numbered lists, and cohesive technical paragraphs remain intact within a single chunk (average length 623 characters). In contrast, character chunking slices across sentences, and semantic chunking split paragraphs into smaller fragments based on local cosine dips.
 
-**Q3: What is the computational and latency trade-off of enabling neural re-ranking in a production RAG pipeline?**
-A: In our benchmark, dense retrieval from ChromaDB took ~9.8ms to 11.6ms per query. Applying `BAAI/bge-reranker-base` to 20 candidates increased total query latency to ~152ms - 167ms (a ~15x increase). For enterprise applications where accuracy is paramount, 150ms is well within acceptable latency budgets (<500ms) for conversational RAG.
+**Q3: What is the computational and latency trade-off of enabling neural re-ranking in a RAG pipeline?**
+A: In our benchmark on CPU, dense retrieval from ChromaDB took ~15ms to 16ms per query. Applying `BAAI/bge-reranker-base` to 20 candidates increased total query latency to ~1,000ms - 1,175ms on CPU.
 
 **Q4: How does the evaluation guarantee that `chunking_qa.jsonl` contains valid, verifiable ground truth without human grading error?**
 A: `eval/generate_chunking_qa.py` parses all documents using PyMuPDF and programmatically asserts that every single `expected_substring` exists verbatim in the extracted document text. If a phrase is mistyped or missing, the generator script raises an immediate error and fails the build.

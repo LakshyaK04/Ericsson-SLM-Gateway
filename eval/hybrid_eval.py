@@ -252,18 +252,20 @@ def run_hybrid_evaluation():
 
         f.write("\n---\n\n## 2. Key Insights & Empirical Findings\n\n")
         f.write(
-            "### 2.1 The Complementary Nature of Dense vs. Sparse Search\n"
-            "- **Lexical Search (BM25)** achieves high precision on exact identifiers, port numbers, error codes, and 3GPP acronyms (`N2`, `N6`, `S-NSSAI`, `2380`), but struggles with conceptual paraphrases where words do not overlap.\n"
-            "- **Dense Vector Search (BGE)** excels on semantic paraphrasing, but tends to blur distinct technical codes (e.g., confusing `Code 4010` with `Code 4020`).\n"
-            "- **Hybrid RRF Fusion** bridges this gap, achieving strong precision across both query categories.\n\n"
+            "### 2.1 Modality Comparison on the Evaluation Set\n"
+            "- On this 24-query set, BM25 alone matched or beat the hybrid configurations on Hit@1 (70.83% vs 66.67%) and MRR (0.7292 vs 0.7083).\n"
+            "- BM25 alone achieved 100.0% Hit@1 on keyword queries and 41.7% on conceptual queries.\n"
+            "- Dense vector search achieved 91.7% Hit@1 on keyword queries and 33.3% on conceptual queries.\n\n"
         )
         f.write(
             "### 2.2 Re-Ranking Impact\n"
-            "- Pairing Hybrid Retrieval with the `bge-reranker-base` cross-encoder maximizes Hit@1 precision by scoring query-passage token pairs with full cross-attention.\n\n"
+            "- Adding the `bge-reranker-base` cross-encoder raised Hit@3 by one query (75.0% to 79.17%), but lowered conceptual Hit@1 (41.7% to 25.0%) and overall Hit@1 (66.67% to 62.5%).\n"
+            "- With 24 queries, each query represents approximately 4.17 pp, so observed differences reflect shifts of only 1-2 queries.\n\n"
         )
         f.write(
-            "### 2.3 RRF Parameter Sensitivity\n"
-            "- Varying the smoothing parameter $k$ between 20, 60, and 100 shows that $k=60$ provides the most balanced fusion without over-weighting top ranks from either system.\n"
+            "### 2.3 RRF Parameter Sensitivity & Test Set Limitations\n"
+            "- Varying the smoothing parameter $k$ across 20, 60, and 100 resulted in identical retrieval metrics (66.67% Hit@1, 75.0% Hit@3, 0.7083 MRR) on this 16-chunk corpus.\n"
+            "- Because the evaluation set is small (24 queries over 4 documents), these findings reflect behavior on this specific sample rather than generalized statistical superiority.\n"
         )
 
     # Clean up temporary Chroma dir

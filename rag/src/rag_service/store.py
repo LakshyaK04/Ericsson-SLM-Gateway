@@ -27,7 +27,7 @@ STRATEGY_COLLECTION_MAP = {
 
 
 class ChromaStore:
-    """Enterprise vector store managing per-strategy ChromaDB collections."""
+    """Vector store managing per-strategy ChromaDB collections."""
 
     def __init__(self, persist_dir: Optional[Union[str, Path]] = None):
         self.persist_dir = Path(persist_dir or settings.CHROMA_PERSIST_DIR)
