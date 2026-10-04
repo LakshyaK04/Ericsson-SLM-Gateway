@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
     PROJECT_CODENAMES: Optional[str] = None  # Comma-separated deny-list, e.g. "Phoenix,Titan,Aurora"
     RAG_SERVICE_URL: str = "http://localhost:8001"
-    RAG_TIMEOUT_SECONDS: float = 30.0
+    RAG_TIMEOUT_SECONDS: float = 180.0
     RAG_DEFAULT_STRATEGY: str = "structure"
 
 
