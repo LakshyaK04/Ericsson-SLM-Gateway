@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local GenAI Stack — Privacy-First SLM Gateway & Hybrid RAG</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-base: #0a0d14;
@@ -32,7 +29,7 @@
     body {
       background: radial-gradient(circle at 15% 15%, #0f172a 0%, #080b11 100%);
       color: var(--text-main);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -117,11 +114,44 @@
     }
 
     .dot {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .dot.dot-online {
       background: var(--green);
       box-shadow: 0 0 8px var(--green);
+    }
+
+    .dot.dot-offline {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+
+    .dot.dot-checking {
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+    }
+
+    .api-key-input {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: 9999px;
+      color: var(--text-main);
+      padding: 0.3rem 0.75rem;
+      font-size: 0.75rem;
+      width: 130px;
+      transition: all 0.2s ease;
+    }
+
+    .api-key-input:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan-glow);
+      width: 175px;
     }
 
     main {
@@ -491,10 +521,17 @@
       </div>
     </div>
     <div class="status-pills">
-      <div class="pill"><div class="dot"></div> Gateway 8000</div>
-      <div class="pill"><div class="dot"></div> RAG 8001</div>
+      <div class="pill" id="gateway-pill" title="Gateway health status">
+        <div id="gateway-dot" class="dot dot-checking"></div>
+        <span id="gateway-status-label">Gateway 8000</span>
+      </div>
+      <div class="pill" id="rag-pill" title="RAG service health status">
+        <div id="rag-dot" class="dot dot-checking"></div>
+        <span id="rag-status-label">RAG 8001</span>
+      </div>
       <div class="pill">Phi-3-mini 4-bit</div>
       <div class="pill">Fail-Closed PII</div>
+      <input type="password" id="gateway-api-key" placeholder="API Key (optional)" title="Optional Bearer token for GATEWAY_API_KEY (leave blank for local unauthenticated mode)" class="api-key-input" oninput="saveApiKey()" />
     </div>
   </header>
 
@@ -733,6 +770,100 @@
   </footer>
 
   <script>
+    // Base configuration and service URLs
+    const GATEWAY_BASE_URL = window.GATEWAY_BASE_URL || '';
+    const RAG_BASE_URL = window.RAG_BASE_URL || 'http://localhost:8001';
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Optional API Key management for Gateway
+    function getGatewayApiKey() {
+      const input = document.getElementById('gateway-api-key');
+      if (input && input.value.trim()) {
+        return input.value.trim();
+      }
+      return localStorage.getItem('slm_gateway_api_key') || '';
+    }
+
+    function saveApiKey() {
+      const input = document.getElementById('gateway-api-key');
+      if (input) {
+        const val = input.value.trim();
+        if (val) {
+          localStorage.setItem('slm_gateway_api_key', val);
+        } else {
+          localStorage.removeItem('slm_gateway_api_key');
+        }
+      }
+    }
+
+    function initApiKeyInput() {
+      const input = document.getElementById('gateway-api-key');
+      if (input) {
+        const saved = localStorage.getItem('slm_gateway_api_key');
+        if (saved) input.value = saved;
+      }
+    }
+
+    function getGatewayHeaders(extra = {}) {
+      const headers = { ...extra };
+      const apiKey = getGatewayApiKey();
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      return headers;
+    }
+
+    // Dynamic health check polling for status dots
+    async function checkServiceHealth() {
+      // Check Gateway
+      const gwDot = document.getElementById('gateway-dot');
+      const gwLabel = document.getElementById('gateway-status-label');
+      try {
+        const gwResp = await fetch(`${GATEWAY_BASE_URL}/health`, {
+          signal: AbortSignal.timeout(3000),
+          headers: getGatewayHeaders()
+        });
+        if (gwResp.ok) {
+          if (gwDot) gwDot.className = 'dot dot-online';
+          if (gwLabel) gwLabel.innerText = 'Gateway 8000';
+        } else {
+          if (gwDot) gwDot.className = 'dot dot-offline';
+          if (gwLabel) gwLabel.innerText = `Gateway (HTTP ${gwResp.status})`;
+        }
+      } catch (err) {
+        if (gwDot) gwDot.className = 'dot dot-offline';
+        if (gwLabel) gwLabel.innerText = 'Gateway (Offline)';
+      }
+
+      // Check RAG
+      const ragDot = document.getElementById('rag-dot');
+      const ragLabel = document.getElementById('rag-status-label');
+      try {
+        const ragResp = await fetch(`${RAG_BASE_URL}/health`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (ragResp.ok) {
+          if (ragDot) ragDot.className = 'dot dot-online';
+          if (ragLabel) ragLabel.innerText = 'RAG 8001';
+        } else {
+          if (ragDot) ragDot.className = 'dot dot-offline';
+          if (ragLabel) ragLabel.innerText = `RAG (HTTP ${ragResp.status})`;
+        }
+      } catch (err) {
+        if (ragDot) ragDot.className = 'dot dot-offline';
+        if (ragLabel) ragLabel.innerText = 'RAG (Offline)';
+      }
+    }
+
     function switchTab(tabId) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -778,7 +909,7 @@
       try {
         const response = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getGatewayHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             messages: [{ role: 'user', content: prompt }],
             stream: streamEnabled,
@@ -875,7 +1006,7 @@
       try {
         const resp = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getGatewayHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             messages: [{ role: 'user', content: text }],
             max_tokens: 1
@@ -909,7 +1040,7 @@
       try {
         const resp = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getGatewayHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             messages: [{ role: 'user', content: text }],
             max_tokens: 1
@@ -946,7 +1077,7 @@
       container.innerHTML = 'Executing hybrid retrieval (BM25 + Dense RRF)...';
 
       try {
-        const resp = await fetch('http://localhost:8001/query', {
+        const resp = await fetch(`${RAG_BASE_URL}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -959,7 +1090,7 @@
         });
 
         if (!resp.ok) {
-          container.innerHTML = `<div style="color: #ef4444;">RAG Service returned HTTP ${resp.status} (Make sure RAG service is running on port 8001).</div>`;
+          container.innerHTML = `<div style="color: #ef4444;">RAG Service returned HTTP ${resp.status} (Make sure RAG service is running on ${escapeHtml(RAG_BASE_URL)}).</div>`;
           return;
         }
 
@@ -974,18 +1105,18 @@
         container.innerHTML = results.map((r, i) => `
           <div class="source-card">
             <div class="source-meta">
-              <span><strong>#${i + 1}</strong> ${r.source} (Page ${r.page})</span>
+              <span><strong>#${i + 1}</strong> ${escapeHtml(r.source)} (Page ${escapeHtml(r.page)})</span>
               <div>
-                <span class="badge badge-dense">Dense: ${r.dense_score}</span>
-                <span class="badge badge-bm25">BM25: ${r.bm25_score || 0.0}</span>
-                <span class="badge badge-rerank">Rerank: ${r.rerank_score}</span>
+                <span class="badge badge-dense">Dense: ${escapeHtml(r.dense_score)}</span>
+                <span class="badge badge-bm25">BM25: ${escapeHtml(r.bm25_score || 0.0)}</span>
+                <span class="badge badge-rerank">Rerank: ${escapeHtml(r.rerank_score)}</span>
               </div>
             </div>
             <div style="color: #cbd5e1; font-size: 0.8rem;">${escapeHtml(r.text)}</div>
           </div>
         `).join('');
       } catch (err) {
-        container.innerHTML = `<div style="color: #ef4444;">Error connecting to RAG service: ${err.message}</div>`;
+        container.innerHTML = `<div style="color: #ef4444;">Error connecting to RAG service: ${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -994,17 +1125,12 @@
       const box = document.getElementById('metrics-output');
       box.innerText = 'Scraping /metrics...';
       try {
-        const resp = await fetch('/metrics');
+        const resp = await fetch('/metrics', { headers: getGatewayHeaders() });
         const text = await resp.text();
         box.innerText = text;
       } catch (err) {
         box.innerText = `Failed to scrape /metrics: ${err.message}`;
       }
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
     // Tab 5: Document Ingestion & Corpus Management
@@ -1083,14 +1209,14 @@
 
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>⏳ Parsing, Chunking & Embedding...</span>';
-      statusMsg.innerHTML = '<span style="color: var(--cyan);">Uploading document to RAG service (port 8001)...</span>';
+      statusMsg.innerHTML = `<span style="color: var(--cyan);">Uploading document to RAG service (${escapeHtml(RAG_BASE_URL)})...</span>`;
 
       const formData = new FormData();
       formData.append('file', selectedIngestFile);
       formData.append('strategies', strategies.join(','));
 
       try {
-        const resp = await fetch('http://localhost:8001/documents', {
+        const resp = await fetch(`${RAG_BASE_URL}/documents`, {
           method: 'POST',
           body: formData
         });
@@ -1120,7 +1246,7 @@
 
         loadIndexedDocuments();
       } catch (err) {
-        statusMsg.innerHTML = `<span style="color: #ef4444;">Connection error (Ensure RAG service is running on :8001): ${escapeHtml(err.message)}</span>`;
+        statusMsg.innerHTML = `<span style="color: #ef4444;">Connection error (Ensure RAG service is running on ${escapeHtml(RAG_BASE_URL)}): ${escapeHtml(err.message)}</span>`;
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span>⚡ Ingest & Build Vector + BM25 Indices</span>';
@@ -1132,9 +1258,9 @@
       container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">Fetching indexed corpus...</div>';
 
       try {
-        const resp = await fetch('http://localhost:8001/documents');
+        const resp = await fetch(`${RAG_BASE_URL}/documents`);
         if (!resp.ok) {
-          container.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem;">Failed to fetch documents (HTTP ${resp.status}). Ensure RAG service is running on port 8001.</div>`;
+          container.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem;">Failed to fetch documents (HTTP ${resp.status}). Ensure RAG service is running on ${escapeHtml(RAG_BASE_URL)}.</div>`;
           return;
         }
 
@@ -1176,7 +1302,7 @@
       if (!confirm(`Are you sure you want to delete document ${docId} and all its indexed chunks?`)) return;
 
       try {
-        const resp = await fetch(`http://localhost:8001/documents/${encodeURIComponent(docId)}`, {
+        const resp = await fetch(`${RAG_BASE_URL}/documents/${encodeURIComponent(docId)}`, {
           method: 'DELETE'
         });
 
@@ -1192,7 +1318,10 @@
     }
 
     // Default presets & initialization on load
+    initApiKeyInput();
     initDropZone();
+    checkServiceHealth();
+    setInterval(checkServiceHealth, 4000);
     setChatPrompt('Explain how the Raft consensus algorithm handles leader election.');
   </script>
 </body>
