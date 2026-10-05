@@ -287,16 +287,22 @@ def test_prometheus_metrics_endpoint(client):
 
 
 def test_playground_endpoint(client):
-    """GET / and GET /playground return HTML playground UI."""
+    """GET / and GET /playground return HTML playground UI with Phase 5 UX elements."""
     resp1 = client.get("/")
     assert resp1.status_code == 200
     assert "text/html" in resp1.headers["content-type"]
     assert "Local GenAI Stack" in resp1.text
     assert "Playground" in resp1.text
+    assert "warmup-banner" in resp1.text
+    assert "chat-stop-btn" in resp1.text
+    assert "renderSafeMarkdown" in resp1.text
+    assert "sources-accordion" in resp1.text
 
     resp2 = client.get("/playground")
     assert resp2.status_code == 200
     assert "text/html" in resp2.headers["content-type"]
+    assert "warmup-banner" in resp2.text
+
 
 
 def test_chat_completions_x_rag_strategy_invalid(client):

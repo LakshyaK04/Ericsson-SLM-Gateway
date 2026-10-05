@@ -155,6 +155,21 @@ async def health():
     }
 
 
+@app.get("/ready")
+async def ready(request: Request):
+    """Readiness probe: returns 200 when models and retriever are initialized."""
+    store_ready = getattr(request.app.state, "store", None) is not None
+    emb_ready = getattr(request.app.state, "embedding_model", None) is not None
+    ret_ready = getattr(request.app.state, "retriever", None) is not None
+    if store_ready and emb_ready and ret_ready:
+        return {"status": "ready", "service": settings.SERVICE_NAME}
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "warming up", "service": settings.SERVICE_NAME},
+    )
+
+
+
 # ============================================================
 # Document Ingestion Routes
 # ============================================================

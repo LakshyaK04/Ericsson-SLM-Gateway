@@ -100,6 +100,16 @@ def test_health_endpoint(client):
     assert "collections" in data
 
 
+def test_ready_endpoint(client):
+    """GET /ready returns 200 when components are initialized."""
+    resp = client.get("/ready")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ready"
+    assert data["service"] == "rag-service"
+
+
+
 def test_upload_invalid_extension(client, tmp_path: Path):
     """POST /documents with non-pdf/docx file returns 400."""
     txt_file = tmp_path / "test.txt"
