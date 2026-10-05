@@ -299,6 +299,83 @@ def test_playground_endpoint(client):
     assert "text/html" in resp2.headers["content-type"]
 
 
+def test_chat_completions_x_rag_strategy_invalid(client):
+    """POST /v1/chat/completions with invalid X-RAG-Strategy returns 422."""
+    payload = {"messages": [{"role": "user", "content": "Hello"}]}
+    resp = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"X-RAG-Strategy": "invalid_strat"},
+    )
+    assert resp.status_code == 422
+    assert "Invalid X-RAG-Strategy" in resp.json()["error"]["message"]
+
+
+def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
+    """POST /v1/chat/completions forwards valid X-RAG-Strategy to RAG client."""
+    from unittest.mock import AsyncMock
+    from slm_gateway.router import RoutingResult
+    import slm_gateway.main as main_mod
+
+    class RagMockRouter:
+        def is_ready(self):
+            return True
+
+        def classify(self, query: str):
+            return RoutingResult(
+                intent="rag",
+                confidence=0.95,
+                route="rag_service",
+                latency_ms=1.0,
+                scores_by_intent={"general": 0.1, "technical": 0.1, "rag": 0.95},
+                fallback_applied=False,
+            )
+
+    monkeypatch.setattr(main_mod, "router_instance", RagMockRouter())
+    app.state.router = RagMockRouter()
+
+    mock_rag_client = AsyncMock()
+    mock_rag_client.has_indexed_documents = AsyncMock(return_value=(True, None))
+    mock_rag_client.get_answer = AsyncMock(
+        return_value=(
+            {
+                "answer": "Test answer from RAG",
+                "sources": [{"source": "doc.pdf", "page": 1, "text": "chunk text"}],
+                "usage": {},
+            },
+            None,
+        )
+    )
+
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
+    app.state.rag_client = mock_rag_client
+
+    payload = {"messages": [{"role": "user", "content": "According to the doc, what is X?"}]}
+
+    resp = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"X-RAG-Strategy": "character"},
+    )
+    assert resp.status_code == 200
+    mock_rag_client.get_answer.assert_called_with(
+        query="According to the doc, what is X?",
+        strategy="character",
+    )
+
+    mock_rag_client.get_answer.reset_mock()
+    resp2 = client.post(
+        "/v1/chat/completions",
+        json=payload,
+    )
+    assert resp2.status_code == 200
+    mock_rag_client.get_answer.assert_called_with(
+        query="According to the doc, what is X?",
+        strategy=None,
+    )
+
+
+
 
 
 

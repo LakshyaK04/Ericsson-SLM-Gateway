@@ -9,7 +9,7 @@ This document catalogs the current operational boundaries and known limitations 
 | Limitation | Impact | Mitigation |
 |---|---|---|
 | **OCR requires Tesseract engine** | Digital text PDFs are parsed directly. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs with no extractable text are rejected with HTTP 400. OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (mocked in CI); real-world scan accuracy is not benchmarked. | Install Tesseract OCR on the host OS (set `TESSERACT_CMD` or add to PATH) or run via the container image containing `tesseract-ocr`. |
-| **No table layout preservation** | PyMuPDF extracts table text as flat strings. Complex multi-column tables lose structural relationships. | For table-heavy documents, consider table-aware parsers (e.g., Camelot, Tabula) as a preprocessing step. |
+| **Table layout extraction boundaries** | Digital text PDFs extract tables using PyMuPDF `find_tables()`, serializing rows as `Header: Value | ...` to preserve tabular associations. Tables without visible grid lines or complex nested structures may fall back to standard text extraction, which can flatten columns into sequential lines. | For complex or borderless tables, specialized table extraction libraries (such as Camelot or Tabula) can be used as a preprocessing step. |
 | **Single-page DOCX grouping** | Word documents without explicit page breaks return all content as page 1. | Section-based pagination can be added if finer granularity is required. |
 | **No HTML, Markdown, or CSV parsing** | Only `.pdf` and `.docx` file formats are supported. Other extensions return HTTP 400. | Extend `parsers/__init__.py` with additional format handlers as needed. |
 
@@ -21,6 +21,7 @@ This document catalogs the current operational boundaries and known limitations 
 |---|---|---|
 | **Single-GPU / CPU semaphore serialization** | The `asyncio.Semaphore(1)` around `model.generate()` serializes all inference requests. Under concurrent load, requests queue sequentially. | Switch to `BACKEND=openai_compatible` and point to a dedicated inference server (vLLM, TGI) with continuous batching. |
 | **In-process model loading** | Loading Phi-3 Mini weights takes ~20-30 seconds on startup. During this window, `/ready` returns 503. | Docker Compose `depends_on: service_healthy` prevents traffic until ready. |
+| **RAG response replay latency** | For requests routed to `rag_service`, the gateway waits for the RAG service to complete generation before replaying the response word-by-word over SSE. Consequently, the initial SSE response time represents total generation latency rather than time-to-first-token (TTFT). In the playground UI, this metric is labeled `Latency (answer replayed)` for RAG routes and `TTFT` only for direct `hf_local` routes. | True end-to-end token streaming would require streaming support from the RAG service generation pipeline. |
 
 ---
 
@@ -42,6 +43,7 @@ This document catalogs the current operational boundaries and known limitations 
 | **Hybrid retrieval vs. BM25 on small set** | Hybrid retrieval (BM25 + BGE dense vectors fused via RRF) is implemented, but on our small 24-query evaluation set, it did not outperform BM25 alone on Hit@1 (66.67% vs 70.83%) or MRR (0.7083 vs 0.7292). | Benchmark on larger, domain-specific corpora to determine whether fusion yields a measurable advantage. |
 | **Small evaluation corpus** | The chunking evaluation uses 3 PDFs totaling 5 pages and 36 queries; the hybrid evaluation uses 4 documents with 24 queries. Real corpora contain hundreds of pages. | Expand the evaluation corpus with larger, messier documents to validate retrieval at scale. |
 | **Cross-encoder latency on CPU** | The `bge-reranker-base` cross-encoder adds ~1,000-1,750 ms per query when re-ranking candidates on CPU without GPU acceleration. | Run on GPU for sub-second re-ranking, or use distilled bi-encoders if low CPU latency is required. |
+| **Table extraction flattening and chunk severance** | Flat table extraction separates keys from values, while fixed-character slicing can sever table rows across adjacent chunks. Even with table-aware row serialization and chunk boundary preservation, queries phrased differently from the document text (semantic mismatch vs. keyword BM25) can fail to rank the target chunk in the top-3 on small corpora (evaluated on a fictional smoke test of 9 questions; e.g., questions requiring cross-chunk inferences or distinct vocabulary). | Preserving table row units in chunkers mitigates cell splitting; query expansion or domain fine-tuning can improve semantic retrieval for paraphrased questions. |
 | **No chunk deduplication** | If the same document is uploaded twice, duplicate chunks are indexed. | Implement document fingerprinting (e.g., content hash) to detect and reject duplicate uploads. |
 
 ---

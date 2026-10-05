@@ -278,6 +278,7 @@ async def list_models(_auth: None = Depends(verify_api_key)):
 async def chat_completions(
     request: ChatCompletionRequest,
     x_bypass_router: Optional[str] = Header(None, alias="X-Bypass-Router"),
+    x_rag_strategy: Optional[str] = Header(None, alias="X-RAG-Strategy"),
     _auth: None = Depends(verify_api_key),
 ):
     """Generate chat completions conforming to the OpenAI API specification.
@@ -297,6 +298,23 @@ async def chat_completions(
                 }
             },
         )
+
+    # Validate optional X-RAG-Strategy header
+    selected_strategy = None
+    if x_rag_strategy is not None:
+        strat = x_rag_strategy.strip().lower()
+        if strat not in ("character", "structure", "semantic"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "error": {
+                        "message": f"Invalid X-RAG-Strategy '{x_rag_strategy}'. Must be one of: character, structure, semantic.",
+                        "type": "invalid_request_error",
+                        "code": 422,
+                    }
+                },
+            )
+        selected_strategy = strat
 
     t0 = time.perf_counter()
     telemetry.inc_active_requests()
@@ -360,7 +378,10 @@ async def chat_completions(
                     x_routing["warning"] = f"RAG service unavailable ({check_err}); fell back to local model."
                 x_routing["route"] = "hf_local"
             else:
-                rag_resp, rag_err = await rag_cli.get_answer(query=query_to_route)
+                rag_resp, rag_err = await rag_cli.get_answer(
+                    query=query_to_route,
+                    strategy=selected_strategy,
+                )
                 if rag_err or not rag_resp:
                     x_routing["warning"] = f"RAG answer generation failed ({rag_err}); fell back to local model."
                     x_routing["route"] = "hf_local"

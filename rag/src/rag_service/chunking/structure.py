@@ -22,8 +22,38 @@ HEADING_REGEX = re.compile(
 )
 
 
+def _has_table(s: str) -> bool:
+    """Check if text contains serialized table rows."""
+    return any(" | " in line or (line.startswith("|") and line.endswith("|")) for line in s.splitlines())
+
+
+def _starts_with_heading(s: str) -> bool:
+    """Check if the first line of text is a recognized heading."""
+    lines = s.strip().splitlines()
+    return bool(lines and HEADING_REGEX.match(lines[0].strip()))
+
+
 def _split_long_section(text: str, max_size: int) -> List[str]:
-    """Split an oversized text block at sentence boundaries."""
+    """Split an oversized text block at sentence boundaries without splitting table rows."""
+    if _has_table(text):
+        lines = text.split("\n")
+        chunks: List[str] = []
+        current = ""
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            candidate = (current + "\n" + line_str).strip() if current else line_str
+            if len(candidate) <= max_size:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                current = line_str
+        if current:
+            chunks.append(current)
+        return chunks
+
     sentences = re.split(r"(?<=[.!?])\s+", text)
     chunks: List[str] = []
     current = ""
@@ -91,13 +121,31 @@ def split_structure_text(
     buffer = ""
 
     for sec in raw_sections:
+        # Prevent merging tables into unrelated sections or merging separate tables
+        if buffer and (_has_table(buffer) or _has_table(sec)):
+            if _has_table(buffer) and (_starts_with_heading(sec) or _has_table(sec)):
+                chunks.append(buffer)
+                buffer = ""
+            elif _has_table(sec) and _starts_with_heading(buffer) and len(buffer) > 200:
+                chunks.append(buffer)
+                buffer = ""
+
         combined = (buffer + "\n\n" + sec).strip() if buffer else sec
 
         if len(combined) <= max_chunk_size:
             buffer = combined
         else:
             if buffer:
-                chunks.append(buffer)
+                # If buffer ends with a heading line, roll it into sec instead of leaving it dangling
+                lines = buffer.rstrip().split("\n")
+                if len(lines) > 1 and HEADING_REGEX.match(lines[-1].strip()):
+                    chunks.append("\n".join(lines[:-1]).strip())
+                    buffer = lines[-1].strip()
+                    sec = (buffer + "\n\n" + sec).strip()
+                    buffer = ""
+                else:
+                    chunks.append(buffer)
+                    buffer = ""
             if len(sec) > max_chunk_size:
                 chunks.extend(_split_long_section(sec, max_chunk_size))
                 buffer = ""

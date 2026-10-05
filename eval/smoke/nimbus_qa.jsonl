@@ -1,0 +1,9 @@
+{"question": "Which port does the ingest gateway use?", "expected_substring": "9443"}
+{"question": "What does ERR-5203 mean?", "expected_substring": "12 seconds"}
+{"question": "What is the default retention period?", "expected_substring": "45"}
+{"question": "How many days are alerts kept?", "expected_substring": "45"}
+{"question": "What is the longest maintenance window?", "expected_substring": "8 hours"}
+{"question": "Why did I get just one page for 40 broken servers?", "expected_substring": "fingerprint"}
+{"question": "What happens if nobody answers a critical alert?", "expected_substring": "10 minutes"}
+{"question": "How do I recover from a huge message backlog?", "expected_substring": "NIMBUS_NOTIFIER_WORKERS"}
+{"question": "How long do access tokens last?", "expected_substring": "24 hours"}

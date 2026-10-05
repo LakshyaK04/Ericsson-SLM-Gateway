@@ -103,7 +103,7 @@ http://localhost:8000/
 http://localhost:8000/playground
 ```
 Features:
-- **Live SSE Token Streaming**: Real-time typewriter effect with token generation.
+- **Live SSE Token Streaming**: Real-time token streaming for local model inference, and replayed word streaming for RAG responses.
 - **PII Sanitizer Lab**: Side-by-side comparison of raw prompts vs redacted model inputs with colored entity pills.
 - **Semantic Intent Radar**: Live visualization of intent similarity scores and threshold fallback.
 - **Hybrid RAG Inspector**: Query search showing dense, BM25, RRF, and cross-encoder scores per chunk.

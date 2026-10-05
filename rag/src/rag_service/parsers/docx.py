@@ -32,11 +32,27 @@ def extract_pages_from_docx(file_path: Union[str, Path]) -> List[Tuple[int, str]
 
     # Also extract any table contents
     for table in doc.tables:
+        if not table.rows:
+            continue
+        first_row_cells = [" ".join(cell.text.split()).strip() for cell in table.rows[0].cells]
+        has_headers = any(first_row_cells) and len(table.rows) > 1
+        headers = [h if h else f"Col{i+1}" for i, h in enumerate(first_row_cells)]
+
         table_rows = []
-        for row in table.rows:
-            row_cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-            if row_cells:
-                table_rows.append(" | ".join(row_cells))
+        start_idx = 1 if has_headers else 0
+        for row in table.rows[start_idx:]:
+            row_parts = []
+            for i, cell in enumerate(row.cells):
+                cell_text = " ".join(cell.text.split()).strip()
+                if not cell_text:
+                    continue
+                if has_headers:
+                    h = headers[i] if i < len(headers) else f"Col{i+1}"
+                    row_parts.append(f"{h}: {cell_text}")
+                else:
+                    row_parts.append(cell_text)
+            if row_parts:
+                table_rows.append(" | ".join(row_parts))
         if table_rows:
             content_blocks.append("\n" + "\n".join(table_rows) + "\n")
 

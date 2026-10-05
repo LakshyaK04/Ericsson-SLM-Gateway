@@ -562,13 +562,21 @@
 
         <textarea id="chat-input" placeholder="Type a message or select a preset..."></textarea>
 
-        <div style="display: flex; gap: 1rem; align-items: center;">
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
           <button id="chat-send-btn" class="btn-action" onclick="sendChatStream()">
             <span>⚡ Send with SSE Streaming</span>
           </button>
           <label style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
             <input type="checkbox" id="chat-stream-toggle" checked> Stream Tokens
           </label>
+          <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); margin-left: auto;">
+            <label for="chat-strategy-select">RAG Strategy:</label>
+            <select id="chat-strategy-select" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: var(--text-main); border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+              <option value="structure" selected>Structure (Default)</option>
+              <option value="character">Character</option>
+              <option value="semantic">Semantic</option>
+            </select>
+          </div>
         </div>
 
         <div class="metrics-bar">
@@ -585,7 +593,7 @@
             <span class="metric-val" id="metric-pii">0</span>
           </div>
           <div class="metric-item">
-            <span class="metric-label">TTFT / Latency</span>
+            <span class="metric-label" id="metric-ttft-label">TTFT</span>
             <span class="metric-val" id="metric-ttft">—</span>
           </div>
         </div>
@@ -597,6 +605,7 @@
           <span id="stream-status" style="font-size: 0.75rem; color: var(--text-muted);">Idle</span>
         </div>
         <div class="console-box" id="chat-output"><span style="color: #64748b;">Response tokens will stream here in real-time...</span></div>
+        <div id="chat-sources-box" style="margin-top: 1rem; display: none;"></div>
       </div>
     </div>
 
@@ -891,6 +900,37 @@
       classifyRouter();
     }
 
+    function renderChatSources(sources) {
+      const sourcesBox = document.getElementById('chat-sources-box');
+      if (!sourcesBox) return;
+      if (!sources || sources.length === 0) {
+        sourcesBox.style.display = 'none';
+        sourcesBox.innerHTML = '';
+        return;
+      }
+      sourcesBox.style.display = 'flex';
+      sourcesBox.style.flexDirection = 'column';
+      sourcesBox.style.gap = '0.5rem';
+      sourcesBox.innerHTML = `
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">
+          Retrieved Sources (${sources.length})
+        </div>
+        ${sources.map((s, idx) => `
+          <div class="source-card" style="padding: 0.75rem;">
+            <div class="source-meta">
+              <span><strong>#${idx + 1}</strong> ${escapeHtml(s.source || 'Document')} (Page ${escapeHtml(s.page || '?')})</span>
+              <div>
+                ${s.dense_score !== undefined ? `<span class="badge badge-dense">Dense: ${escapeHtml(typeof s.dense_score === 'number' ? s.dense_score.toFixed(3) : s.dense_score)}</span>` : ''}
+                ${s.bm25_score !== undefined ? `<span class="badge badge-bm25">BM25: ${escapeHtml(typeof s.bm25_score === 'number' ? s.bm25_score.toFixed(3) : s.bm25_score)}</span>` : ''}
+                ${s.rerank_score !== undefined ? `<span class="badge badge-rerank">Rerank: ${escapeHtml(typeof s.rerank_score === 'number' ? s.rerank_score.toFixed(3) : s.rerank_score)}</span>` : ''}
+              </div>
+            </div>
+            <div style="color: #cbd5e1; font-size: 0.8rem; margin-top: 0.4rem; white-space: pre-wrap;">${escapeHtml(s.text || '')}</div>
+          </div>
+        `).join('')}
+      `;
+    }
+
     // Tab 1: Live Chat with SSE Streaming
     async function sendChatStream() {
       const prompt = document.getElementById('chat-input').value.trim();
@@ -900,16 +940,35 @@
       const sendBtn = document.getElementById('chat-send-btn');
       const statusSpan = document.getElementById('stream-status');
       const streamEnabled = document.getElementById('chat-stream-toggle').checked;
+      const stratSelect = document.getElementById('chat-strategy-select');
+      const selectedStrategy = stratSelect ? stratSelect.value : 'structure';
+      const ttftLabel = document.getElementById('metric-ttft-label');
+      const sourcesBox = document.getElementById('chat-sources-box');
 
       output.innerHTML = '';
       sendBtn.disabled = true;
       statusSpan.innerText = 'Connecting...';
+      if (sourcesBox) {
+        sourcesBox.style.display = 'none';
+        sourcesBox.innerHTML = '';
+      }
+      if (ttftLabel) ttftLabel.innerText = 'TTFT';
+      document.getElementById('metric-route').innerText = '—';
+      document.getElementById('metric-intent').innerText = '—';
+      document.getElementById('metric-pii').innerText = '0';
+      document.getElementById('metric-ttft').innerText = '—';
+
       const t0 = performance.now();
 
       try {
+        const reqHeaders = { 'Content-Type': 'application/json' };
+        if (selectedStrategy) {
+          reqHeaders['X-RAG-Strategy'] = selectedStrategy;
+        }
+
         const response = await fetch('/v1/chat/completions', {
           method: 'POST',
-          headers: getGatewayHeaders({ 'Content-Type': 'application/json' }),
+          headers: getGatewayHeaders(reqHeaders),
           body: JSON.stringify({
             messages: [{ role: 'user', content: prompt }],
             stream: streamEnabled,
@@ -948,18 +1007,27 @@
               try {
                 const parsed = JSON.parse(dataStr);
                 if (parsed.x_routing) {
-                  document.getElementById('metric-route').innerText = parsed.x_routing.route || 'hf_local';
+                  const route = parsed.x_routing.route || 'hf_local';
+                  document.getElementById('metric-route').innerText = route;
                   document.getElementById('metric-intent').innerText = parsed.x_routing.intent || 'general';
+                  if (route === 'rag_service') {
+                    if (ttftLabel) ttftLabel.innerText = 'Latency (answer replayed)';
+                  } else {
+                    if (ttftLabel) ttftLabel.innerText = 'TTFT';
+                  }
                 }
                 if (parsed.x_pii) {
                   document.getElementById('metric-pii').innerText = parsed.x_pii.redactions || 0;
+                }
+                if (parsed.x_sources) {
+                  renderChatSources(parsed.x_sources);
                 }
 
                 const delta = parsed.choices?.[0]?.delta?.content || '';
                 if (delta) {
                   if (!firstTokenTime) {
                     firstTokenTime = performance.now() - t0;
-                    document.getElementById('metric-ttft').innerText = `${Math.round(firstTokenTime)}ms (TTFT)`;
+                    document.getElementById('metric-ttft').innerText = `${Math.round(firstTokenTime)}ms`;
                   }
                   fullText += delta;
                   output.innerHTML = escapeHtml(fullText) + '<span class="cursor"></span>';
@@ -978,11 +1046,20 @@
           const content = res.choices?.[0]?.message?.content || '';
           output.innerHTML = escapeHtml(content);
           if (res.x_routing) {
-            document.getElementById('metric-route').innerText = res.x_routing.route || 'hf_local';
+            const route = res.x_routing.route || 'hf_local';
+            document.getElementById('metric-route').innerText = route;
             document.getElementById('metric-intent').innerText = res.x_routing.intent || 'general';
+            if (route === 'rag_service') {
+              if (ttftLabel) ttftLabel.innerText = 'Latency (answer replayed)';
+            } else {
+              if (ttftLabel) ttftLabel.innerText = 'TTFT';
+            }
           }
           if (res.x_pii) {
             document.getElementById('metric-pii').innerText = res.x_pii.redactions || 0;
+          }
+          if (res.x_sources) {
+            renderChatSources(res.x_sources);
           }
           document.getElementById('metric-ttft').innerText = `${Math.round(performance.now() - t0)}ms`;
           statusSpan.innerText = 'Finished';

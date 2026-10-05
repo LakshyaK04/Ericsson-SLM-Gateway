@@ -8,12 +8,12 @@ This report evaluates three chunking strategies (`character`, `structure`, `sema
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | **Off** | 16 | 423.6 | 86.1% | 100.0% | 0.9213 | 16.0 |
-| `character` | **On** | 16 | 423.6 | 88.9% | 97.2% | 0.9306 | 1025.1 |
-| `structure` | **Off** | 10 | 623.6 | 94.4% | 100.0% | 0.9722 | 15.5 |
-| `structure` | **On** | 10 | 623.6 | 100.0% | 100.0% | 1.0000 | 1069.9 |
-| `semantic` | **Off** | 16 | 388.7 | 88.9% | 100.0% | 0.9352 | 15.9 |
-| `semantic` | **On** | 16 | 388.7 | 94.4% | 97.2% | 0.9583 | 1175.0 |
+| `character` | **Off** | 16 | 423.6 | 86.1% | 100.0% | 0.9213 | 25.1 |
+| `character` | **On** | 16 | 423.6 | 88.9% | 97.2% | 0.9306 | 209.2 |
+| `structure` | **Off** | 10 | 623.6 | 94.4% | 100.0% | 0.9722 | 23.9 |
+| `structure` | **On** | 10 | 623.6 | 100.0% | 100.0% | 1.0000 | 217.0 |
+| `semantic` | **Off** | 16 | 388.7 | 88.9% | 100.0% | 0.9352 | 25.6 |
+| `semantic` | **On** | 16 | 388.7 | 94.4% | 97.2% | 0.9583 | 223.7 |
 
 ## 3. Chunking Profile & Granularity
 
@@ -28,8 +28,7 @@ This report evaluates three chunking strategies (`character`, `structure`, `sema
 ### 4.1 Impact of Cross-Encoder Re-Ranking
 - **Hit@1 Improvements**: Cross-encoder re-ranking improved Hit@1 for `structure` (94.44% to 100.00%, +5.56 pp) and `semantic` (88.89% to 94.44%, +5.55 pp).
 - **Character Chunking Trade-off**: Re-ranking character chunking changed Hit@1 from 86.11% to 88.89% (+2.78 pp), while Hit@3 shifted from 100.00% to 97.22% (-2.78 pp).
-- **Measured Latency Cost**: Dense search lookup alone averaged ~15.5-16.0 ms on CPU; adding neural cross-encoder re-ranking on CPU added cross-attention inference overhead, raising total latency to ~1025.1-1175.0 ms per query.
-
+- **Measured Latency Cost**: Dense search lookup alone averaged ~23.9-25.6 ms on CPU; adding neural cross-encoder re-ranking on CPU added cross-attention inference overhead, raising total latency to ~209.2-223.7 ms per query.
 
 ### 4.2 Strategy Comparison
 - **Structure Chunking**: Yields natural conceptual boundaries for technical documents with section headers, lists, and defined paragraphs. Achieved 100% Hit@1 with re-ranking.

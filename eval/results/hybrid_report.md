@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Reciprocal Rank Fusion (RRF) Benchmark Report
 
-**Date:** 2026-10-04 19:35:27
+**Date:** 2026-10-05 10:49:43
 **Dense Model:** `BAAI/bge-small-en-v1.5`
 **Sparse Model:** Okapi BM25 ($k_1=1.5, b=0.75$)
 **Cross-Encoder:** `BAAI/bge-reranker-base`
@@ -17,12 +17,12 @@ This empirical evaluation measures the performance gains of combining lexical BM
 
 | Configuration | Re-Ranker | RRF $k$ | Overall Hit@1 | Overall Hit@3 | MRR | Keyword Hit@1 | Conceptual Hit@1 | Latency (ms) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **BM25 Sparse Lexical Only** | Off | 60 | 70.83% | 75.0% | 0.7292 | 100.0% | 41.7% | 0.17 |
-| **BGE Dense Vector Only** | Off | 60 | 62.5% | 75.0% | 0.6806 | 91.7% | 33.3% | 17.35 |
-| **Hybrid (BM25 + Dense RRF k=60)** | Off | 60 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 17.59 |
-| **Hybrid + Cross-Encoder Re-Ranking** | On | 60 | 62.5% | 79.17% | 0.7014 | 100.0% | 25.0% | 1735.37 |
-| **Hybrid RRF (k=20)** | Off | 20 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 15.67 |
-| **Hybrid RRF (k=100)** | Off | 100 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 16.05 |
+| **BM25 Sparse Lexical Only** | Off | 60 | 70.83% | 75.0% | 0.7292 | 100.0% | 41.7% | 0.26 |
+| **BGE Dense Vector Only** | Off | 60 | 62.5% | 75.0% | 0.6806 | 91.7% | 33.3% | 25.12 |
+| **Hybrid (BM25 + Dense RRF k=60)** | Off | 60 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 24.5 |
+| **Hybrid + Cross-Encoder Re-Ranking** | On | 60 | 62.5% | 79.17% | 0.6944 | 100.0% | 25.0% | 300.58 |
+| **Hybrid RRF (k=20)** | Off | 20 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 22.11 |
+| **Hybrid RRF (k=100)** | Off | 100 | 66.67% | 75.0% | 0.7083 | 91.7% | 41.7% | 24.36 |
 
 ---
 

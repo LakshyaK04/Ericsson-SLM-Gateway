@@ -155,3 +155,37 @@ def test_parse_document_dispatcher_rejects_unsupported_extensions(tmp_path: Path
     with pytest.raises(ValueError) as excinfo:
         parse_document(txt_file)
     assert "Unsupported file format" in str(excinfo.value)
+
+
+def test_pdf_parser_table_structure_and_chunking(tmp_path: Path):
+    """Fast test verifying PDF table extraction serializes rows with headers and chunking keeps rows intact."""
+    from rag_service.chunking.character import split_character_text
+    from rag_service.chunking.structure import split_structure_text
+
+    pdf_path = tmp_path / "table_test.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((50, 40), "Configuration parameters for the alerting service runtime environment.")
+    page.draw_rect(pymupdf.Rect(50, 50, 350, 110), color=(0, 0, 0), width=1)
+    page.draw_line(pymupdf.Point(50, 80), pymupdf.Point(350, 80), color=(0, 0, 0), width=1)
+    page.draw_line(pymupdf.Point(200, 50), pymupdf.Point(200, 110), color=(0, 0, 0), width=1)
+    page.insert_text((60, 70), "Setting")
+    page.insert_text((210, 70), "Value")
+    page.insert_text((60, 100), "RETENTION_DAYS")
+    page.insert_text((210, 100), "45")
+    doc.save(str(pdf_path))
+    doc.close()
+
+    pages = extract_pages_from_pdf(pdf_path)
+    assert len(pages) == 1
+    page_text = pages[0][1]
+    assert "Setting: RETENTION_DAYS | Value: 45" in page_text
+
+    # Verify character chunking keeps the table row unbroken
+    char_chunks = split_character_text(page_text, chunk_size=500, overlap=50)
+    assert any("Setting: RETENTION_DAYS | Value: 45" in c for c in char_chunks)
+
+    # Verify structure chunking keeps the table row unbroken
+    struct_chunks = split_structure_text(page_text, max_chunk_size=1000)
+    assert any("Setting: RETENTION_DAYS | Value: 45" in c for c in struct_chunks)
+

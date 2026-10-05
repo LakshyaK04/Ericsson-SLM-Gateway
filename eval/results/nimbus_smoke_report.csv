@@ -1,0 +1,19 @@
+Strategy,Mode,Reranker,Hit@3 (%),Hit@1 (%),MRR,Avg Latency (ms),Failed Questions
+character,dense,Off,77.78,55.56,0.6667,209.74,2
+character,dense,On,88.89,66.67,0.7778,526.84,1
+character,sparse,Off,88.89,77.78,0.8333,10.00,1
+character,sparse,On,100.00,66.67,0.8148,317.20,0
+character,hybrid,Off,100.00,66.67,0.7963,182.96,0
+character,hybrid,On,88.89,66.67,0.7778,344.19,1
+structure,dense,Off,77.78,66.67,0.7037,174.27,2
+structure,dense,On,88.89,77.78,0.8333,467.73,1
+structure,sparse,Off,100.00,88.89,0.9444,2.01,0
+structure,sparse,On,88.89,77.78,0.8333,259.38,1
+structure,hybrid,Off,88.89,66.67,0.7593,142.87,1
+structure,hybrid,On,88.89,77.78,0.8333,451.97,1
+semantic,dense,Off,77.78,66.67,0.7222,136.78,2
+semantic,dense,On,88.89,66.67,0.7407,386.69,1
+semantic,sparse,Off,88.89,66.67,0.7778,4.29,1
+semantic,sparse,On,100.00,66.67,0.7963,174.40,0
+semantic,hybrid,Off,100.00,55.56,0.7593,94.32,0
+semantic,hybrid,On,100.00,66.67,0.7963,341.16,0
