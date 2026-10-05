@@ -313,7 +313,7 @@ def test_chat_completions_x_rag_strategy_invalid(client):
 
 def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
     """POST /v1/chat/completions forwards valid X-RAG-Strategy to RAG client."""
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, ANY
     from slm_gateway.router import RoutingResult
     import slm_gateway.main as main_mod
 
@@ -361,6 +361,7 @@ def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
     mock_rag_client.get_answer.assert_called_with(
         query="According to the doc, what is X?",
         strategy="character",
+        request_id=ANY,
     )
 
     mock_rag_client.get_answer.reset_mock()
@@ -372,7 +373,130 @@ def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
     mock_rag_client.get_answer.assert_called_with(
         query="According to the doc, what is X?",
         strategy=None,
+        request_id=ANY,
     )
+
+
+def test_request_body_size_limit(client, monkeypatch):
+    """Requests exceeding MAX_REQUEST_BODY_BYTES return 413 with OpenAI error."""
+    import slm_gateway.main as main_mod
+    monkeypatch.setattr(main_mod.settings, "MAX_REQUEST_BODY_BYTES", 50)
+
+    # Payload larger than 50 bytes
+    payload = {"messages": [{"role": "user", "content": "This payload is definitely longer than 50 bytes"}]}
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 413
+    data = resp.json()
+    assert data["error"]["code"] == 413
+    assert "Request body size exceeds" in data["error"]["message"]
+
+
+def test_request_message_count_and_char_limits(client, monkeypatch):
+    """Requests exceeding MAX_REQUEST_MESSAGES or MAX_MESSAGE_CHARS return 400."""
+    import slm_gateway.main as main_mod
+    monkeypatch.setattr(main_mod.settings, "MAX_REQUEST_MESSAGES", 2)
+    monkeypatch.setattr(main_mod.settings, "MAX_MESSAGE_CHARS", 20)
+
+    # 1. Exceeds message count
+    payload_too_many = {
+        "messages": [
+            {"role": "user", "content": "msg 1"},
+            {"role": "assistant", "content": "msg 2"},
+            {"role": "user", "content": "msg 3"},
+        ]
+    }
+    resp1 = client.post("/v1/chat/completions", json=payload_too_many)
+    assert resp1.status_code == 400
+    assert "exceeding the maximum allowed limit of 2" in resp1.json()["error"]["message"]
+
+    # 2. Exceeds message characters
+    payload_too_long = {
+        "messages": [
+            {"role": "user", "content": "This message is way longer than twenty characters."}
+        ]
+    }
+    resp2 = client.post("/v1/chat/completions", json=payload_too_long)
+    assert resp2.status_code == 400
+    assert "exceeding maximum limit of 20" in resp2.json()["error"]["message"]
+
+
+def test_rate_limiting_returns_429(client, monkeypatch):
+    """When rate limit is exceeded, gateway returns 429 with Retry-After header."""
+    import slm_gateway.main as main_mod
+    monkeypatch.setattr(main_mod.settings, "RATE_LIMIT_ENABLED", True)
+    limiter = main_mod.rate_limiter
+    original_enabled = limiter.enabled
+    original_limit = limiter.requests_limit
+    original_window = limiter.window_seconds
+    limiter.enabled = True
+    limiter.requests_limit = 2
+    limiter.window_seconds = 60
+    limiter.reset()
+
+    try:
+        r1 = client.get("/health")
+        assert r1.status_code == 200
+        r2 = client.get("/health")
+        assert r2.status_code == 200
+        r3 = client.get("/health")
+        assert r3.status_code == 429
+        assert "Retry-After" in r3.headers
+        data = r3.json()
+        assert data["error"]["code"] == 429
+    finally:
+        limiter.enabled = original_enabled
+        limiter.requests_limit = original_limit
+        limiter.window_seconds = original_window
+        limiter.reset()
+
+
+def test_bounded_queue_rejection_returns_503(client, monkeypatch):
+    """Inference queue overflow or timeout returns 503 Service Unavailable."""
+    import slm_gateway.main as main_mod
+    from slm_gateway.backends import InferenceQueueFullError, InferenceTimeoutError
+    from unittest.mock import AsyncMock
+
+    mock_backend = AsyncMock()
+    mock_backend.is_ready = lambda: True
+    mock_backend.generate.side_effect = InferenceQueueFullError("Queue capacity 10 reached")
+
+    monkeypatch.setattr(main_mod, "backend", mock_backend)
+    app.state.backend = mock_backend
+
+    payload = {"messages": [{"role": "user", "content": "Hello"}]}
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["error"]["code"] == 503
+    assert "Queue capacity 10 reached" in data["error"]["message"]
+
+    # Test timeout error
+    mock_backend.generate.side_effect = InferenceTimeoutError("Inference timed out after 30s")
+    resp_timeout = client.post("/v1/chat/completions", json=payload)
+    assert resp_timeout.status_code == 503
+    assert data["error"]["code"] == 503
+    assert "timed out" in resp_timeout.json()["error"]["message"]
+
+
+def test_x_request_id_propagation_and_error_inclusion(client):
+    """X-Request-ID is preserved or generated and included in response headers and error bodies."""
+    # 1. Custom request-id preserved in header
+    resp = client.get("/health", headers={"X-Request-ID": "custom-trace-12345"})
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Request-ID") == "custom-trace-12345"
+
+    # 2. Generated request-id if not provided
+    resp_no_header = client.get("/health")
+    assert resp_no_header.status_code == 200
+    assert "X-Request-ID" in resp_no_header.headers
+    assert resp_no_header.headers["X-Request-ID"].startswith("req-")
+
+    # 3. Request-id included in error response payload (schema validation error -> 422)
+    err_resp = client.post("/v1/chat/completions", json={}, headers={"X-Request-ID": "err-trace-9999"})
+    assert err_resp.status_code == 422
+    assert err_resp.headers.get("X-Request-ID") == "err-trace-9999"
+    assert err_resp.json()["error"]["request_id"] == "err-trace-9999"
+
 
 
 

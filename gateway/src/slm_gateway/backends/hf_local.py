@@ -1,6 +1,7 @@
 """In-process HuggingFace backend using Phi-3-mini and bitsandbytes."""
 
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 from threading import Thread
 from typing import AsyncIterator, Dict, List, Optional, Tuple
@@ -19,6 +20,16 @@ from .base import LLMBackend
 logger = logging.getLogger(__name__)
 
 
+class InferenceQueueFullError(Exception):
+    """Raised when the in-process inference queue is at capacity."""
+    pass
+
+
+class InferenceTimeoutError(Exception):
+    """Raised when an inference request times out waiting in the execution queue."""
+    pass
+
+
 class HFLocalBackend(LLMBackend):
     """Local in-process LLM backend running Phi-3 Mini."""
 
@@ -30,7 +41,42 @@ class HFLocalBackend(LLMBackend):
         self.tokenizer = None
         self.model = None
         self._semaphore = asyncio.Semaphore(1)
+        self._queue_size = 0
+        self._max_queue = getattr(config, "INFERENCE_MAX_QUEUE_SIZE", 10)
+        self._queue_timeout = getattr(config, "INFERENCE_QUEUE_TIMEOUT_SECONDS", 30.0)
         self._ready = False
+
+    @asynccontextmanager
+    async def _inference_slot(self):
+        """Acquire single-concurrency GPU inference lock with queue bounds and timeout."""
+        if self._queue_size >= self._max_queue:
+            logger.warning(
+                "Inference queue full (%d/%d pending requests). Rejecting request.",
+                self._queue_size,
+                self._max_queue,
+            )
+            raise InferenceQueueFullError(
+                f"Inference engine overloaded: queue capacity of {self._max_queue} requests exceeded."
+            )
+
+        self._queue_size += 1
+        acquired = False
+        try:
+            try:
+                await asyncio.wait_for(self._semaphore.acquire(), timeout=self._queue_timeout)
+                acquired = True
+            except asyncio.TimeoutError as e:
+                logger.warning("Inference queue wait timed out after %.1fs", self._queue_timeout)
+                raise InferenceTimeoutError(
+                    f"Inference request timed out after {self._queue_timeout}s waiting for execution slot."
+                ) from e
+            finally:
+                self._queue_size = max(0, self._queue_size - 1)
+
+            yield
+        finally:
+            if acquired:
+                self._semaphore.release()
 
     async def load(self) -> None:
         """Load tokenizer and quantized model into GPU/CPU memory."""
@@ -179,8 +225,8 @@ class HFLocalBackend(LLMBackend):
         top_p: float = 1.0,
         max_tokens: int = 512,
     ) -> Tuple[str, int, int, str]:
-        """Generate response with single-concurrency lock on GPU."""
-        async with self._semaphore:
+        """Generate response with bounded queue lock on GPU."""
+        async with self._inference_slot():
             return await asyncio.to_thread(
                 self._generate_sync,
                 messages,
@@ -196,8 +242,8 @@ class HFLocalBackend(LLMBackend):
         top_p: float = 1.0,
         max_tokens: int = 512,
     ) -> AsyncIterator[str]:
-        """Execute token streaming chat completion protected by single-concurrency GPU lock."""
-        async with self._semaphore:
+        """Execute token streaming chat completion protected by bounded queue GPU lock."""
+        async with self._inference_slot():
             trimmed_messages = self._trim_messages_if_needed(messages, max_tokens)
             inputs = self.tokenizer.apply_chat_template(
                 trimmed_messages,

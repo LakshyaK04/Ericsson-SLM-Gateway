@@ -8,13 +8,15 @@ import tempfile
 from typing import Optional
 import uuid
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from .chunking import chunk_document
 from .config import settings
 from .embeddings import EmbeddingModel, get_embedding_model
 from .parsers import parse_document
+from .pii import redact_ingest_text
+from .rate_limiter import InMemoryRateLimiter
 from .reranker import Reranker, get_reranker
 from .retriever import Retriever, get_retriever
 from .generation import generate_grounded_answer
@@ -85,6 +87,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+rate_limiter = InMemoryRateLimiter(
+    requests_limit=settings.RATE_LIMIT_REQUESTS,
+    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    enabled=settings.RATE_LIMIT_ENABLED,
+)
+
+
+def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
+    """Validate Bearer token for protected RAG administration endpoints."""
+    if not settings.RAG_API_KEY:
+        return
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header. Expected 'Bearer <key>'.",
+        )
+    token = authorization.split("Bearer ", 1)[1].strip()
+    if token != settings.RAG_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect API key provided.",
+        )
+
+
+@app.middleware("http")
+async def rag_security_and_tracing_middleware(request: Request, call_next):
+    """Enforce request-ID tracing and in-memory rate limiting."""
+    req_id = request.headers.get("X-Request-ID")
+    if not req_id:
+        req_id = f"req-{uuid.uuid4().hex[:12]}"
+    request.state.request_id = req_id
+
+    if settings.RATE_LIMIT_ENABLED:
+        client_ip = (
+            request.headers.get("x-forwarded-for")
+            or (request.client.host if request.client else "unknown")
+        ).split(",")[0].strip()
+        allowed, retry_after = rate_limiter.check(client_ip)
+        if not allowed:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={
+                    "X-Request-ID": req_id,
+                    "Retry-After": str(retry_after),
+                },
+                content={"detail": f"Rate limit exceeded. Try again in {retry_after} seconds."},
+            )
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
 
 # ============================================================
 # Health Probe
@@ -108,6 +162,7 @@ async def health():
 async def upload_document(
     file: UploadFile = File(...),
     strategies: str = Form("character,structure,semantic"),
+    _auth: None = Depends(verify_api_key),
 ):
     """Upload and index a document (.pdf or .docx) under specified chunking strategies.
 
@@ -144,6 +199,12 @@ async def upload_document(
 
     try:
         content = await file.read()
+        if len(content) > settings.MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Uploaded file size ({len(content)} bytes) exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_BYTES} bytes.",
+            )
+
         with open(temp_file, "wb") as f:
             f.write(content)
 
@@ -155,6 +216,19 @@ async def upload_document(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+
+        # Optional PII redaction on ingest
+        if settings.PII_REDACTION_ON_INGEST:
+            codenames = (
+                [c.strip() for c in settings.PROJECT_CODENAMES.split(",") if c.strip()]
+                if settings.PROJECT_CODENAMES
+                else None
+            )
+            redacted_pages = []
+            for p_num, p_text in pages:
+                sanitized, _ = redact_ingest_text(p_text, codenames=codenames)
+                redacted_pages.append((p_num, sanitized))
+            pages = redacted_pages
 
         # Generate unique document ID
         doc_id = f"doc_{uuid.uuid4().hex[:8]}"
@@ -217,7 +291,7 @@ async def upload_document(
 
 
 @app.get("/documents", response_model=DocumentListResponse)
-async def list_documents():
+async def list_documents(_auth: None = Depends(verify_api_key)):
     """List all indexed documents and their chunk distributions."""
     chroma_store = store or get_chroma_store(settings)
     raw_docs = chroma_store.list_documents()
@@ -239,7 +313,7 @@ async def list_documents():
 
 
 @app.delete("/documents/{doc_id}", response_model=DeleteDocumentResponse)
-async def delete_document(doc_id: str):
+async def delete_document(doc_id: str, _auth: None = Depends(verify_api_key)):
     """Delete an indexed document from all ChromaDB collections."""
     chroma_store = store or get_chroma_store(settings)
     deleted_count = chroma_store.delete_document(doc_id)
@@ -268,6 +342,12 @@ async def delete_document(doc_id: str):
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
     """Retrieve and cross-encoder re-rank document chunks via hybrid (BM25 + Dense) or dense search."""
+    if len(request.query) > settings.MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query length ({len(request.query)}) exceeds maximum limit of {settings.MAX_QUERY_LENGTH} characters.",
+        )
+
     rag_retriever = retriever or get_retriever(cfg=settings)
 
     results = rag_retriever.retrieve(
@@ -290,8 +370,14 @@ async def query_documents(request: QueryRequest):
 
 
 @app.post("/answer", response_model=AnswerResponse)
-async def answer_question(request: QueryRequest):
+async def answer_question(request: QueryRequest, raw_request: Request):
     """Retrieve relevant document chunks and generate a grounded answer via Gateway."""
+    if len(request.query) > settings.MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Query length ({len(request.query)}) exceeds maximum limit of {settings.MAX_QUERY_LENGTH} characters.",
+        )
+
     rag_retriever = retriever or get_retriever(cfg=settings)
 
     results = rag_retriever.retrieve(
@@ -304,10 +390,18 @@ async def answer_question(request: QueryRequest):
         retrieval_mode=request.retrieval_mode,
     )
 
+    req_id = getattr(raw_request.state, "request_id", None)
+    call_kwargs = {}
+    import inspect
+    sig = inspect.signature(generate_grounded_answer)
+    if "request_id" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        call_kwargs["request_id"] = req_id
+
     answer_resp = await generate_grounded_answer(
         query=request.query,
         chunks=results,
         config=settings,
+        **call_kwargs,
     )
     return answer_resp
 

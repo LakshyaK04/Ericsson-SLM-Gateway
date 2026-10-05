@@ -2,7 +2,7 @@
 
 from ..config import Settings
 from .base import LLMBackend
-from .hf_local import HFLocalBackend
+from .hf_local import HFLocalBackend, InferenceQueueFullError, InferenceTimeoutError
 from .openai_compat import OpenAICompatibleBackend
 
 
@@ -20,5 +20,7 @@ __all__ = [
     "LLMBackend",
     "HFLocalBackend",
     "OpenAICompatibleBackend",
+    "InferenceQueueFullError",
+    "InferenceTimeoutError",
     "get_backend",
 ]

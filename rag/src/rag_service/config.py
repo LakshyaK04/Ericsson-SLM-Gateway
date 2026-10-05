@@ -17,7 +17,21 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8001
     DEBUG: bool = False
+    RAG_API_KEY: Optional[str] = None  # Optional Bearer key for upload/delete/admin endpoints
     CORS_ALLOW_ORIGINS: str = "http://localhost:8000,http://localhost:8001"
+
+    # Upload & request size limits
+    MAX_UPLOAD_SIZE_BYTES: int = 26_214_400  # 25MB max file upload
+    MAX_QUERY_LENGTH: int = 4096            # Max characters for retrieval query
+
+    # In-memory rate limiting per client IP
+    RATE_LIMIT_ENABLED: bool = False
+    RATE_LIMIT_REQUESTS: int = 120
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # Ingestion PII redaction (optional)
+    PII_REDACTION_ON_INGEST: bool = False
+    PROJECT_CODENAMES: Optional[str] = None
 
     @property
     def cors_origins(self) -> list[str]:

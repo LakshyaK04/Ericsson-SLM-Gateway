@@ -187,3 +187,75 @@ def test_document_ingestion_query_and_deletion_lifecycle(client, sample_pdf: Pat
     # 6. Deleting non-existent doc returns 404
     del_again = client.delete(f"/documents/{doc_id}")
     assert del_again.status_code == 404
+
+
+def test_rag_api_key_protection_on_documents(client, monkeypatch):
+    """When RAG_API_KEY is configured, /documents endpoints require valid Bearer token."""
+    from rag_service.config import settings
+    monkeypatch.setattr(settings, "RAG_API_KEY", "secret-rag-key-123")
+
+    # 1. GET /documents without auth -> 401
+    r_no_auth = client.get("/documents")
+    assert r_no_auth.status_code == 401
+
+    # 2. GET /documents with invalid key -> 401
+    r_bad_auth = client.get("/documents", headers={"Authorization": "Bearer wrong-key"})
+    assert r_bad_auth.status_code == 401
+
+    # 3. GET /documents with valid key -> 200
+    r_good = client.get("/documents", headers={"Authorization": "Bearer secret-rag-key-123"})
+    assert r_good.status_code == 200
+
+    # 4. DELETE without auth -> 401
+    r_del = client.delete("/documents/doc_123")
+    assert r_del.status_code == 401
+
+    # 5. POST /documents without auth -> 401
+    r_post = client.post("/documents")
+    assert r_post.status_code == 401
+
+
+def test_ingestion_pii_redaction(client, monkeypatch, tmp_path: Path):
+    """When PII_REDACTION_ON_INGEST=True, uploaded documents have PII stripped prior to chunking."""
+    from rag_service.config import settings
+    monkeypatch.setattr(settings, "PII_REDACTION_ON_INGEST", True)
+
+    pdf_path = tmp_path / "sensitive_memo.pdf"
+    doc = pymupdf.open()
+    p = doc.new_page()
+    p.insert_text(
+        (50, 50),
+        "Confidential Project Titan: Contact lead engineer at alice.smith@ericsson.com or call 555-019-2834.",
+    )
+    doc.save(str(pdf_path))
+    doc.close()
+
+    with open(pdf_path, "rb") as f:
+        resp = client.post(
+            "/documents",
+            files={"file": ("sensitive_memo.pdf", f, "application/pdf")},
+            data={"strategies": "structure"},
+        )
+    assert resp.status_code == 200
+    doc_id = resp.json()["doc_id"]
+
+    try:
+        # Query for the ingested content
+        query_resp = client.post("/query", json={"query": "Who is the lead engineer?", "strategy": "structure"})
+        assert query_resp.status_code == 200
+        results = query_resp.json()["results"]
+        assert len(results) > 0
+
+        chunk_text = results[0]["text"]
+        # Raw PII must NOT appear in chunk text
+        assert "alice.smith@ericsson.com" not in chunk_text
+        assert "555-019-2834" not in chunk_text
+        assert "Titan" not in chunk_text
+
+        # Redacted tokens must appear
+        assert "<EMAIL_ADDRESS>" in chunk_text
+        assert "<PHONE_NUMBER>" in chunk_text
+        assert "<PROJECT_CODENAME>" in chunk_text
+    finally:
+        client.delete(f"/documents/{doc_id}")
+

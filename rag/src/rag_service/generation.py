@@ -41,6 +41,7 @@ async def generate_grounded_answer(
     chunks: List[QueryResultItem],
     config: Optional[Settings] = None,
     client: Optional[httpx.AsyncClient] = None,
+    request_id: Optional[str] = None,
 ) -> AnswerResponse:
     """Send formatted context and question to the Gateway to generate a grounded answer."""
     cfg = config or settings
@@ -85,6 +86,10 @@ async def generate_grounded_answer(
         "X-Bypass-Router": "true",
         "Content-Type": "application/json",
     }
+    if request_id:
+        headers["X-Request-ID"] = request_id
+    if getattr(cfg, "GATEWAY_API_KEY", None):
+        headers["Authorization"] = f"Bearer {cfg.GATEWAY_API_KEY}"
 
     gateway_endpoint = f"{cfg.GATEWAY_URL.rstrip('/')}/v1/chat/completions"
 

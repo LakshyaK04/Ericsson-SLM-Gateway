@@ -276,3 +276,43 @@ async def test_gateway_lifespan_fail_open_continues_with_warning(monkeypatch):
 
     async with lifespan(test_app):
         assert getattr(test_app.state, "pii_redactor", None) is None
+
+
+def test_chat_completions_redacts_system_and_assistant_messages(monkeypatch):
+    """Verify that system and assistant messages are also redacted before reaching backend."""
+    mock_backend = RecordingMockBackend()
+    import slm_gateway.main as main_mod
+
+    monkeypatch.setattr(main_mod, "backend", mock_backend)
+    app.state.backend = mock_backend
+
+    client = TestClient(app, raise_server_exceptions=False)
+    payload = {
+        "messages": [
+            {"role": "system", "content": "Admin contact is admin@company.com."},
+            {"role": "assistant", "content": "Previous assistant note for +1-555-987-6543."},
+            {"role": "user", "content": "My id is EMP-99999."},
+        ]
+    }
+
+    response = client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"X-Bypass-Router": "true"},
+    )
+    assert response.status_code == 200
+
+    assert len(mock_backend.received_messages) == 3
+    sys_msg = mock_backend.received_messages[0]
+    asst_msg = mock_backend.received_messages[1]
+    user_msg = mock_backend.received_messages[2]
+
+    assert "admin@company.com" not in sys_msg["content"]
+    assert "<EMAIL_ADDRESS>" in sys_msg["content"]
+
+    assert "+1-555-987-6543" not in asst_msg["content"]
+    assert "<PHONE_NUMBER>" in asst_msg["content"]
+
+    assert "EMP-99999" not in user_msg["content"]
+    assert "<EMPLOYEE_ID>" in user_msg["content"]
+

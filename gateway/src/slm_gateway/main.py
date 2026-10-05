@@ -12,10 +12,16 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
-from .backends import LLMBackend, get_backend
+from .backends import (
+    InferenceQueueFullError,
+    InferenceTimeoutError,
+    LLMBackend,
+    get_backend,
+)
 from .config import settings
 from .pii import PIIRedactionError, PIIRedactor, get_redactor
 from .rag_client import RAGClient
+from .rate_limiter import InMemoryRateLimiter
 from .router import IntentRouter, RoutingResult, get_router
 from .schemas import (
     ChatCompletionChunk,
@@ -100,6 +106,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+rate_limiter = InMemoryRateLimiter(
+    requests_limit=settings.RATE_LIMIT_REQUESTS,
+    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    enabled=settings.RATE_LIMIT_ENABLED,
+)
+
+
+@app.middleware("http")
+async def security_and_tracing_middleware(request: Request, call_next):
+    """Enforce request-ID tracking, body size limits, and per-client IP rate limiting."""
+    # 1. Request ID (extract or generate)
+    req_id = request.headers.get("X-Request-ID")
+    if not req_id:
+        req_id = f"req-{uuid.uuid4().hex[:12]}"
+    request.state.request_id = req_id
+
+    # 2. Max body size check via Content-Length header
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    headers={"X-Request-ID": req_id},
+                    content={
+                        "error": {
+                            "message": f"Request body size exceeds maximum limit of {settings.MAX_REQUEST_BODY_BYTES} bytes.",
+                            "type": "invalid_request_error",
+                            "code": 413,
+                            "request_id": req_id,
+                        }
+                    },
+                )
+        except ValueError:
+            pass
+
+    # 3. In-memory IP rate limiting
+    if settings.RATE_LIMIT_ENABLED:
+        client_ip = (
+            request.headers.get("x-forwarded-for")
+            or (request.client.host if request.client else "unknown")
+        ).split(",")[0].strip()
+        allowed, retry_after = rate_limiter.check(client_ip)
+        if not allowed:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={
+                    "X-Request-ID": req_id,
+                    "Retry-After": str(retry_after),
+                },
+                content={
+                    "error": {
+                        "message": f"Rate limit exceeded. Try again in {retry_after} seconds.",
+                        "type": "rate_limit_error",
+                        "code": 429,
+                        "request_id": req_id,
+                    }
+                },
+            )
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
 
 # ============================================================
 # OpenAI-style Error Handlers
@@ -108,21 +178,29 @@ app.add_middleware(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Format Pydantic schema validation errors into OpenAI error format."""
+    req_id = getattr(request.state, "request_id", None)
+    err_body = {
+        "error": {
+            "message": str(exc),
+            "type": "invalid_request_error",
+            "code": 422,
+        }
+    }
+    if req_id:
+        err_body["error"]["request_id"] = req_id
+    headers = {"X-Request-ID": req_id} if req_id else {}
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={
-            "error": {
-                "message": str(exc),
-                "type": "invalid_request_error",
-                "code": 422,
-            }
-        },
+        headers=headers,
+        content=err_body,
     )
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Ensure HTTP exceptions adhere to OpenAI error structure."""
+    req_id = getattr(request.state, "request_id", None)
+    headers = {"X-Request-ID": req_id} if req_id else {}
     if isinstance(exc.detail, dict) and "error" in exc.detail:
         content = exc.detail
     else:
@@ -133,20 +211,26 @@ async def http_exception_handler(request: Request, exc: HTTPException):
                 "code": exc.status_code,
             }
         }
-    return JSONResponse(status_code=exc.status_code, content=content)
+    if req_id and "error" in content and isinstance(content["error"], dict):
+        content["error"]["request_id"] = req_id
+    return JSONResponse(status_code=exc.status_code, headers=headers, content=content)
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """Handle unexpected server exceptions."""
-    logger.error("Internal server error: %s", str(exc), exc_info=True)
+    req_id = getattr(request.state, "request_id", None)
+    headers = {"X-Request-ID": req_id} if req_id else {}
+    logger.error("Internal server error [%s]: %s", req_id or "unknown", str(exc), exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        headers=headers,
         content={
             "error": {
                 "message": str(exc),
                 "type": "server_error",
                 "code": 500,
+                "request_id": req_id,
             }
         },
     )
@@ -322,15 +406,46 @@ async def chat_completions(
 
     t0 = time.perf_counter()
     telemetry.inc_active_requests()
+    req_id = getattr(raw_request.state, "request_id", None)
 
-    # 1. Redact PII from user messages
+    # Request size limits: message count and message character limits
+    if len(request.messages) > settings.MAX_REQUEST_MESSAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": {
+                    "message": f"Request contains {len(request.messages)} messages, exceeding the maximum allowed limit of {settings.MAX_REQUEST_MESSAGES}.",
+                    "type": "invalid_request_error",
+                    "code": 400,
+                    "request_id": req_id,
+                }
+            },
+        )
+
+    for idx, msg in enumerate(request.messages):
+        msg_len = len(msg.content or "")
+        if msg_len > settings.MAX_MESSAGE_CHARS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": {
+                        "message": f"Message at index {idx} has {msg_len} characters, exceeding maximum limit of {settings.MAX_MESSAGE_CHARS}.",
+                        "type": "invalid_request_error",
+                        "code": 400,
+                        "request_id": req_id,
+                    }
+                },
+            )
+
+    # 1. Redact PII from all user-supplied text paths (user, system, assistant)
     total_redactions = 0
     sanitized_messages = []
     redactor = getattr(raw_request.app.state, "pii_redactor", None) or get_redactor(settings)
 
     for message in request.messages:
         msg_dict = message.model_dump()
-        if msg_dict.get("role") == "user":
+        role = msg_dict.get("role", "")
+        if role in ("user", "system", "assistant"):
             try:
                 redacted_content, count = redactor.redact(msg_dict.get("content", ""))
                 msg_dict["content"] = redacted_content
@@ -344,6 +459,7 @@ async def chat_completions(
                             "message": f"PII redaction failed: {str(e)}",
                             "type": "pii_redaction_error",
                             "code": 500,
+                            "request_id": req_id,
                         }
                     },
                 )
@@ -374,7 +490,7 @@ async def chat_completions(
         # Apply intent effects: 'rag' calls the RAG service if documents are indexed
         if route_result.intent == "rag":
             rag_cli = getattr(raw_request.app.state, "rag_client", None) or RAGClient(settings)
-            has_docs, check_err = await rag_cli.has_indexed_documents()
+            has_docs, check_err = await rag_cli.has_indexed_documents(request_id=req_id)
             if not has_docs:
                 if check_err == "no_documents_indexed":
                     x_routing["warning"] = "No documents indexed in RAG service; fell back to local model."
@@ -385,6 +501,7 @@ async def chat_completions(
                 rag_resp, rag_err = await rag_cli.get_answer(
                     query=query_to_route,
                     strategy=selected_strategy,
+                    request_id=req_id,
                 )
                 if rag_err or not rag_resp:
                     x_routing["warning"] = f"RAG answer generation failed ({rag_err}); fell back to local model."
@@ -544,9 +661,40 @@ async def chat_completions(
                 )
                 yield f"data: {stop_chunk.model_dump_json()}\n\n"
                 yield "data: [DONE]\n\n"
+            except InferenceQueueFullError as e:
+                logger.warning("Streaming inference queue capacity exceeded: %s", str(e))
+                err_payload = json.dumps({
+                    "error": {
+                        "message": str(e),
+                        "type": "server_overloaded",
+                        "code": 503,
+                        "request_id": req_id,
+                    }
+                })
+                yield f"data: {err_payload}\n\n"
+                yield "data: [DONE]\n\n"
+            except InferenceTimeoutError as e:
+                logger.warning("Streaming inference queue timeout: %s", str(e))
+                err_payload = json.dumps({
+                    "error": {
+                        "message": str(e),
+                        "type": "timeout",
+                        "code": 503,
+                        "request_id": req_id,
+                    }
+                })
+                yield f"data: {err_payload}\n\n"
+                yield "data: [DONE]\n\n"
             except Exception as e:
                 logger.error("Streaming generation failed: %s", str(e), exc_info=True)
-                err_payload = json.dumps({"error": {"message": str(e), "type": "generation_error", "code": 500}})
+                err_payload = json.dumps({
+                    "error": {
+                        "message": str(e),
+                        "type": "generation_error",
+                        "code": 500,
+                        "request_id": req_id,
+                    }
+                })
                 yield f"data: {err_payload}\n\n"
                 yield "data: [DONE]\n\n"
             finally:
@@ -567,6 +715,34 @@ async def chat_completions(
             top_p=request.top_p,
             max_tokens=request.max_tokens,
         )
+    except InferenceQueueFullError as e:
+        logger.warning("Inference queue capacity exceeded: %s", str(e))
+        telemetry.dec_active_requests()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": {
+                    "message": str(e),
+                    "type": "server_overloaded",
+                    "code": 503,
+                    "request_id": req_id,
+                }
+            },
+        )
+    except InferenceTimeoutError as e:
+        logger.warning("Inference queue timeout: %s", str(e))
+        telemetry.dec_active_requests()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": {
+                    "message": str(e),
+                    "type": "timeout",
+                    "code": 503,
+                    "request_id": req_id,
+                }
+            },
+        )
     except Exception as e:
         logger.error("Generation failed: %s", str(e), exc_info=True)
         telemetry.dec_active_requests()
@@ -582,6 +758,7 @@ async def chat_completions(
                     "message": f"Generation failed: {str(e)}",
                     "type": "generation_error",
                     "code": 500,
+                    "request_id": req_id,
                 }
             },
         )

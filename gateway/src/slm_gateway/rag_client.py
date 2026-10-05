@@ -22,22 +22,31 @@ class RAGClient:
         self.timeout = self.config.RAG_TIMEOUT_SECONDS
         self._external_client = client
 
+    def _get_headers(self, request_id: Optional[str] = None) -> Dict[str, str]:
+        headers: Dict[str, str] = {}
+        if request_id:
+            headers["X-Request-ID"] = request_id
+        if getattr(self.config, "RAG_API_KEY", None):
+            headers["Authorization"] = f"Bearer {self.config.RAG_API_KEY}"
+        return headers
+
     async def _get_client(self) -> httpx.AsyncClient:
         return self._external_client or httpx.AsyncClient()
 
-    async def has_indexed_documents(self) -> Tuple[bool, Optional[str]]:
+    async def has_indexed_documents(self, request_id: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """Check whether the RAG service is online and has indexed documents.
 
         Returns:
             Tuple of (has_docs: bool, reason_if_false: Optional[str])
         """
         endpoint = f"{self.base_url}/documents"
+        headers = self._get_headers(request_id)
         try:
             if self._external_client:
-                resp = await self._external_client.get(endpoint, timeout=self.timeout)
+                resp = await self._external_client.get(endpoint, headers=headers, timeout=self.timeout)
             else:
                 async with httpx.AsyncClient() as client:
-                    resp = await client.get(endpoint, timeout=self.timeout)
+                    resp = await client.get(endpoint, headers=headers, timeout=self.timeout)
 
             if resp.status_code != 200:
                 logger.warning("RAG service /documents returned status %d", resp.status_code)
@@ -65,6 +74,7 @@ class RAGClient:
         strategy: Optional[str] = None,
         retrieve_k: int = 20,
         final_k: int = 3,
+        request_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Request a grounded answer from the RAG service.
 
@@ -79,13 +89,14 @@ class RAGClient:
             "final_k": final_k,
             "use_reranker": True,
         }
+        headers = self._get_headers(request_id)
 
         try:
             if self._external_client:
-                resp = await self._external_client.post(endpoint, json=payload, timeout=self.timeout)
+                resp = await self._external_client.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
             else:
                 async with httpx.AsyncClient() as client:
-                    resp = await client.post(endpoint, json=payload, timeout=self.timeout)
+                    resp = await client.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
 
             if resp.status_code != 200:
                 logger.warning("RAG service /answer returned status %d", resp.status_code)
