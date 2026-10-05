@@ -6,7 +6,7 @@ The **RAG Service** is a decoupled microservice providing document ingestion, mu
 
 ## Features
 
-- **Document Parsing**: High-fidelity text extraction from PDF (PyMuPDF) and DOCX (`python-docx`) preserving page markers, headings, and paragraph boundaries. Rejects empty/scanned PDFs with clear 400 errors.
+- **Document Parsing**: High-fidelity text extraction from PDF (PyMuPDF) and DOCX (`python-docx`) preserving page markers, headings, and paragraph boundaries. Digital text PDFs are parsed directly. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs are rejected with HTTP 400.
 - **Selectable Chunking**: Supports 3 distinct segmentation strategies:
   - `character`: Fixed-size sliding window (500 chars, 50 overlap) with backward whitespace snapping.
   - `structure`: Heading-aware hierarchy merging paragraphs up to 1000 chars. **Achieved 100% Hit@1 in empirical evaluation.**
@@ -76,7 +76,21 @@ Configure via environment variables or `.env`:
 | `RETRIEVE_K` | int | `20` | Candidate chunk count for dense stage |
 | `FINAL_K` | int | `3` | Final chunk count after re-ranking |
 | `GATEWAY_URL` | string | `http://localhost:8000` | Gateway URL for text generation |
-| `GATEWAY_TIMEOUT` | float | `30.0` | HTTP timeout when calling Gateway |
+| `GATEWAY_TIMEOUT` | float | `180.0` | HTTP timeout when calling Gateway |
+| `TESSERACT_CMD` | string | `None` | Optional path to Tesseract OCR binary |
+
+---
+
+### Optical Character Recognition (OCR) Setup
+Digital text PDFs are parsed directly. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs are rejected with HTTP 400.
+- **Windows**: Install [Tesseract OCR for Windows](https://github.com/UB-Mannheim/tesseract/wiki). Add it to your system PATH or configure `TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe` in `.env`.
+- **Linux (Debian/Ubuntu)**: Install the system package:
+  ```bash
+  sudo apt-get update && sudo apt-get install -y tesseract-ocr
+  ```
+- **Docker**: The provided `rag/Dockerfile` includes `tesseract-ocr` via `apt-get` (untested in this local environment).
+
+*Note on testing*: OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (and mocked in CI); real-world scan accuracy is not benchmarked.
 
 ---
 
@@ -134,5 +148,6 @@ uv run pytest rag/tests/ -v
 ## Troubleshooting
 
 - **ChromaDB Lock Error on Windows**: Ensure multiple test runners are not writing concurrently to the same local directory.
-- **Empty PDF Error**: If an uploaded PDF contains scanned raster images without a digital text layer, the parser returns HTTP 400. OCR is not supported.
+- **Empty / Scanned PDF Error**: If an uploaded PDF contains scanned raster images without a digital text layer, the parser falls back to Tesseract OCR if installed. If Tesseract is not installed or finds no text, the parser returns HTTP 400: *"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."*
 - **Gateway Connection Refused on `/answer`**: Verify the SLM Gateway is active on `http://localhost:8000`.
+

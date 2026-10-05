@@ -115,14 +115,15 @@ def test_upload_invalid_extension(client, tmp_path: Path):
 
 
 def test_upload_empty_pdf_returns_400(client, empty_pdf: Path):
-    """POST /documents with an empty PDF returns 400 OCR error."""
+    """POST /documents with an empty PDF returns 400 when no text is found."""
     with open(empty_pdf, "rb") as f:
         resp = client.post(
             "/documents",
             files={"file": ("blank.pdf", f, "application/pdf")},
         )
     assert resp.status_code == 400
-    assert "OCR is not supported" in resp.json()["detail"]
+    assert "No extractable text found in PDF" in resp.json()["detail"]
+    assert "OCR is unavailable or found no text" in resp.json()["detail"]
 
 
 def test_document_ingestion_query_and_deletion_lifecycle(client, sample_pdf: Path):

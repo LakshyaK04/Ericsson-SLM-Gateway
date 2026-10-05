@@ -189,6 +189,7 @@ Evaluated on 48 held-out synthetic queries written by the author with 0 training
 - **Evaluation sets are small and author-written**: The chunking evaluation used 3 PDFs / 5 pages and 36 questions; the hybrid evaluation used 4 technical documents / 16 chunks and 24 queries; the router evaluation used 48 queries.
 - **Hybrid retrieval vs. BM25**: On this small test set, hybrid fusion did not clearly outperform BM25 alone on Hit@1 or MRR. A larger, diverse technical corpus is required to determine whether hybrid retrieval provides a net benefit.
 - **Hardware context**: All retrieval, embedding, and cross-encoder benchmarks were executed on CPU.
+- **Document parsing and OCR**: Digital text PDFs are parsed directly via PyMuPDF. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs with no extractable text are rejected with HTTP 400. OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (mocked in CI); real-world scan accuracy is not benchmarked.
 
 ---
 

@@ -35,5 +35,8 @@ class Settings(BaseSettings):
     GATEWAY_MODEL: str = "microsoft/Phi-3-mini-4k-instruct"
     GATEWAY_TIMEOUT: float = 180.0
 
+    # OCR configuration
+    TESSERACT_CMD: Optional[str] = None
+
 
 settings = Settings()

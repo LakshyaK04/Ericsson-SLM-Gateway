@@ -7,27 +7,73 @@ it automatically falls back to Tesseract OCR when available.
 
 import io
 import logging
+import os
 from pathlib import Path
 import shutil
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 from PIL import Image
 import pymupdf
 
+from rag_service.config import settings
+
 logger = logging.getLogger(__name__)
 
-# Check Tesseract availability
-_TESSERACT_AVAILABLE = False
-try:
-    import pytesseract
+# State tracker for OCR availability and logging
+_TESSERACT_AVAILABLE: Optional[bool] = None
+_LOGGED_OCR_STATUS: bool = False
 
-    if not shutil.which("tesseract"):
-        win_path = Path("C:/Program Files/Tesseract-OCR/tesseract.exe")
-        if win_path.exists():
-            pytesseract.pytesseract.tesseract_cmd = str(win_path)
-    pytesseract.get_tesseract_version()
-    _TESSERACT_AVAILABLE = True
-except Exception:
-    _TESSERACT_AVAILABLE = False
+
+def is_ocr_available() -> bool:
+    """Check if Tesseract OCR is operational on the host system.
+
+    Resolves Tesseract binary path via:
+    1. settings.TESSERACT_CMD (configured via TESSERACT_CMD env var)
+    2. System PATH via shutil.which('tesseract')
+    3. Optional convenience fallback for standard Windows installer path
+
+    Logs availability status once at INFO level.
+    """
+    global _TESSERACT_AVAILABLE, _LOGGED_OCR_STATUS
+    if _TESSERACT_AVAILABLE is not None:
+        if not _LOGGED_OCR_STATUS:
+            logger.info(
+                "Tesseract OCR fallback: %s",
+                "enabled" if _TESSERACT_AVAILABLE else "disabled",
+            )
+            _LOGGED_OCR_STATUS = True
+        return _TESSERACT_AVAILABLE
+
+    try:
+        import pytesseract
+
+        # 1. Configured via TESSERACT_CMD setting / env var
+        if settings.TESSERACT_CMD:
+            pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+        # 2. In PATH
+        elif shutil.which("tesseract"):
+            pass
+        # 3. Optional convenience fallback for default Windows install directory; never raises
+        elif os.name == "nt":
+            try:
+                win_path = Path("C:/Program Files/Tesseract-OCR/tesseract.exe")
+                if win_path.is_file():
+                    pytesseract.pytesseract.tesseract_cmd = str(win_path)
+            except Exception:
+                pass
+
+        pytesseract.get_tesseract_version()
+        _TESSERACT_AVAILABLE = True
+    except Exception:
+        _TESSERACT_AVAILABLE = False
+
+    if not _LOGGED_OCR_STATUS:
+        logger.info(
+            "Tesseract OCR fallback: %s",
+            "enabled" if _TESSERACT_AVAILABLE else "disabled",
+        )
+        _LOGGED_OCR_STATUS = True
+
+    return _TESSERACT_AVAILABLE
 
 
 def clean_text(text: str) -> str:
@@ -49,14 +95,17 @@ def extract_pages_from_pdf(file_path: Union[str, Path]) -> List[Tuple[int, str]]
     doc = pymupdf.open(str(file_path))
     pages: List[Tuple[int, str]] = []
     total_characters = 0
+    ocr_enabled = is_ocr_available()
 
     try:
         for idx, page in enumerate(doc):
             page_text = clean_text(page.get_text())
 
             # If page has sparse or no digital text (e.g. slide titles or scanned images)
-            if (not page_text or len(page_text) < 60) and _TESSERACT_AVAILABLE:
+            if (not page_text or len(page_text) < 60) and ocr_enabled:
                 try:
+                    import pytesseract
+
                     pix = page.get_pixmap(dpi=150)
                     img = Image.open(io.BytesIO(pix.tobytes("png")))
                     ocr_text = clean_text(pytesseract.image_to_string(img))
@@ -76,7 +125,8 @@ def extract_pages_from_pdf(file_path: Union[str, Path]) -> List[Tuple[int, str]]
 
     if total_characters == 0 or not pages:
         raise ValueError(
-            "No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported or yielded no text)."
+            "No extractable text found in PDF. The document appears empty or scanned, "
+            "and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."
         )
 
     return pages

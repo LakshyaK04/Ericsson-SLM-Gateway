@@ -8,7 +8,7 @@ This document catalogs the current operational boundaries and known limitations 
 
 | Limitation | Impact | Mitigation |
 |---|---|---|
-| **OCR requires Tesseract engine** | Scanned image-only pages automatically fall back to Tesseract OCR when installed on the host OS (`tesseract.exe` or `apt-get install tesseract-ocr`). On systems without Tesseract installed, scanned pages with zero digital text return an error. | Install Tesseract OCR on the host or in container environments for automatic image text extraction. |
+| **OCR requires Tesseract engine** | Digital text PDFs are parsed directly. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs with no extractable text are rejected with HTTP 400. OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (mocked in CI); real-world scan accuracy is not benchmarked. | Install Tesseract OCR on the host OS (set `TESSERACT_CMD` or add to PATH) or run via the container image containing `tesseract-ocr`. |
 | **No table layout preservation** | PyMuPDF extracts table text as flat strings. Complex multi-column tables lose structural relationships. | For table-heavy documents, consider table-aware parsers (e.g., Camelot, Tabula) as a preprocessing step. |
 | **Single-page DOCX grouping** | Word documents without explicit page breaks return all content as page 1. | Section-based pagination can be added if finer granularity is required. |
 | **No HTML, Markdown, or CSV parsing** | Only `.pdf` and `.docx` file formats are supported. Other extensions return HTTP 400. | Extend `parsers/__init__.py` with additional format handlers as needed. |

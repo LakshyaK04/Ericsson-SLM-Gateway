@@ -259,7 +259,7 @@ We implemented the document chunking module with a unified `Chunk` dataclass (`c
 4. `chunking/__init__.py`: Multi-page, multi-strategy document chunking dispatcher.
 
 We built document parsers in `parsers/`:
-1. `pdf.py`: PyMuPDF (`fitz`) text extraction on a per-page basis preserving 1-indexed page numbers. Rejects empty or scanned image-only PDFs with a 400 error (`"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)"`).
+1. `pdf.py`: PyMuPDF (`fitz`) text extraction on a per-page basis preserving 1-indexed page numbers. Digital text PDFs are parsed directly; scanned pages fall back to Tesseract OCR when available. Rejects empty or scanned PDFs where OCR is unavailable or finds no text with a 400 error (`"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."`).
 2. `docx.py`: python-docx extraction preserving headings, paragraphs, and table text.
 3. `parsers/__init__.py`: Unified file format dispatcher validating `.pdf` and `.docx` extensions and rejecting unsupported file formats.
 
@@ -294,7 +294,7 @@ We verified the service with 15 passing tests (`test_chunking.py`, `test_parsers
 - **Asymmetric query instruction prefixing** because BGE models are trained with contrastive learning where queries require task instructions while documents represent raw unadorned content.
 - **Isolated Chroma collections per chunking strategy** ensuring that character, structure, and semantic chunks never compete for vector slots in the same index, enabling unbiased comparative evaluation in Phase 5.
 - **Snapping character chunk boundaries to whitespace** preventing split words, truncated variable names, or damaged acronyms at chunk edges.
-- **Failing early on empty or image-only PDFs** informing users immediately that OCR is not supported rather than silently creating an empty document index.
+- **Failing early on empty or unscannable PDFs** informing users immediately when OCR is unavailable or yields no text rather than silently creating an empty document index.
 
 ### Technical Questions
 
@@ -311,7 +311,7 @@ A: Character chunking cuts text at fixed length intervals snapping to whitespace
 A: Separate collections ensure that HNSW vector graph indexes and cosine distance spaces are isolated per strategy. This prevents chunks from one strategy from crowding out candidates during dense retrieval, enabling completely independent benchmarking in Phase 5.
 
 **Q5: What error occurs if an uploaded PDF contains only scanned images, and why fail at upload time?**
-A: The parser computes total extracted characters across all pages. If total characters is 0, it raises a 400 error: "No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)." Failing early prevents indexing empty ghost documents and gives clear, actionable feedback to users.
+A: The parser computes total extracted characters across all pages. Digital text PDFs are parsed directly via PyMuPDF. If a page has sparse or no text, it falls back to Tesseract OCR when installed. If total characters is 0 (or OCR is unavailable/yields no text), it raises a 400 error: "No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)." Failing early prevents indexing empty ghost documents and gives clear, actionable feedback to users.
 
 ### Verification command
 
@@ -572,7 +572,7 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
    - Total test verification: **81 passed out of 81 tests**.
 
 3. **Known Limitations & Production Considerations (`docs/KNOWN_LIMITATIONS.md`)**:
-   - Documented operational boundaries across document ingestion (lack of OCR for scanned images, tabular layouts), concurrency (single-GPU semaphore serialisation, absence of SSE streaming), privacy (English-only spaCy models, static codename deny-lists), and environment constraints (Windows file locking on Chroma segments, host NVIDIA container requirements).
+   - Documented operational boundaries across document ingestion (Tesseract dependency for scanned pages, tabular layouts), concurrency (single-GPU semaphore serialisation, absence of SSE streaming), privacy (English-only spaCy models, static codename deny-lists), and environment constraints (Windows file locking on Chroma segments, host NVIDIA container requirements).
 
 4. **Definition of Done Verification**:
    - All 11 checklist requirements in `AGENT_BUILD_PLAN.md` Section 9 verified and satisfied.
@@ -589,14 +589,14 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
 
 ### Why we did it this way
 
-- **Honest Limitations over Vague Promises:** Real enterprise systems have operational boundaries. Documenting that scanned PDFs require OCR and that in-process Phi-3 serializes requests demonstrates technical maturity and equips engineers with genuine operational insights.
+- **Honest Limitations over Vague Promises:** Real enterprise systems have operational boundaries. Documenting that scanned pages require Tesseract OCR (and are rejected when absent) and that in-process Phi-3 serializes requests demonstrates technical maturity and equips engineers with genuine operational insights.
 - **Fast vs. Slow Test Partitioning:** Running 80 tests in ~1 minute enables fast local TDD and CI pull-request checks without downloading 2.6GB of weights, while preserving full end-to-end integration tests in `@pytest.mark.slow`.
 - **Decoupled Architecture with HTTP Contracts:** The Gateway and RAG services communicate strictly over HTTP using standard REST interfaces. If the local Phi-3 backend becomes a bottleneck under high user volume, operators can transition to `BACKEND=openai_compatible` without modifying a single line of RAG code.
 
 ### Technical Questions
 
 **Q1: What happens if an enterprise user uploads an image-only scanned PDF to the RAG service?**
-A: The RAG service's PDF parser (`pymupdf`) extracts zero text characters across all pages. The service intercepts this condition immediately and returns HTTP 400 Bad Request with: `"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.
+A: Digital text PDFs are parsed directly. If an image-only scanned PDF is uploaded, the parser falls back to Tesseract OCR if available. If Tesseract is not installed on the system (or yields no text), total extracted characters across all pages is zero, and the service returns HTTP 400 Bad Request with: `"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.
 
 **Q2: How does the Gateway prevent CUDA out-of-memory errors when multiple users send simultaneous requests to `hf_local`?**
 A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)`. This ensures that even under concurrent inbound HTTP traffic, only one generation job executes on the GPU at any given instant; subsequent requests queue safely in the asyncio event loop.

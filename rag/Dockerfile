@@ -17,10 +17,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install minimal OS dependencies for healthcheck and native wheels
+# Install minimal OS dependencies for healthcheck, OCR, and native wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
+    tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast, reliable package installation

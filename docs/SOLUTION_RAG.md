@@ -28,7 +28,7 @@ Uploads and indexes a technical document under one or more chunking strategies.
   - `file`: PDF or DOCX binary stream. (Unsupported formats return HTTP 400).
   - `strategies`: Comma-separated list (`character,structure,semantic`).
 - **Validation**:
-  - Rejects empty files or image-only scanned PDFs with 400 error: *"No extractable text found in PDF; document appears empty or contains only scanned images (OCR is not supported)."*
+  - Rejects empty files or image-only scanned PDFs (when Tesseract is unavailable or yields no text) with 400 error: *"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."*
 
 ### 2.2 `GET /documents`
 Lists all currently indexed documents across ChromaDB collections.
@@ -127,7 +127,7 @@ X-Bypass-Router: true
 
 ## 6. Limitations
 
-1. **Scanned & Image-Only PDFs**: PyMuPDF extracts text directly from the digital PDF text layer. Scanned pages or raster screenshots contain zero extractable text and are rejected with HTTP 400 (OCR is not integrated).
+1. **Scanned & Image-Only PDFs**: Digital text PDFs are parsed directly via PyMuPDF. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs with no extractable text are rejected with HTTP 400. OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (mocked in CI); real-world scan accuracy is not benchmarked.
 2. **Complex Multi-Column / Tabular Layouts**: Multi-column text flow and borderless tables may interleave text blocks when extracted sequentially, requiring table-aware parsers for strict row-column formatting.
 3. **Small Synthetic Evaluation Set**: The benchmark corpus consists of 3 PDFs totaling 5 pages and 36 questions generated via `scripts/create_eval_docs.py`. Real-world corpora are substantially larger and messier.
 4. **Re-Ranking Overhead on CPU**: Cross-encoder re-ranking adds ~1,000-1,160 ms inference latency per query on CPU.
