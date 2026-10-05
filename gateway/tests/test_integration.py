@@ -8,14 +8,12 @@ Validates:
 5. Grounded prompt generation and context formatting.
 """
 
-from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
-import pytest
+from unittest.mock import AsyncMock
 
-from slm_gateway.config import Settings
+import pytest
+from fastapi.testclient import TestClient
 from slm_gateway.main import app
 from slm_gateway.rag_client import RAGClient
-from slm_gateway.schemas import ChatCompletionRequest, ChatMessage
 
 
 class MockBackend:
@@ -50,6 +48,7 @@ def setup_gateway_app():
 
     # Ensure router is initialized
     from slm_gateway.router import get_router
+
     router = get_router(main_mod.settings)
     main_mod.router_instance = router
     app.state.router = router
@@ -88,6 +87,7 @@ def test_rag_routing_with_indexed_documents_returns_sources(client, monkeypatch)
     )
 
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
@@ -99,7 +99,10 @@ def test_rag_routing_with_indexed_documents_returns_sources(client, monkeypatch)
     assert resp.status_code == 200
     data = resp.json()
 
-    assert data["choices"][0]["message"]["content"] == "According to the document [1], the UPF is the primary data path anchor."
+    assert (
+        data["choices"][0]["message"]["content"]
+        == "According to the document [1], the UPF is the primary data path anchor."
+    )
     assert data["x_routing"]["route"] == "rag_service"
     assert data["x_sources"] is not None
     assert len(data["x_sources"]) == 1
@@ -113,6 +116,7 @@ def test_rag_routing_with_no_documents_downgrades_to_local_model(client, monkeyp
     mock_rag_client.has_indexed_documents.return_value = (False, "no_documents_indexed")
 
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
@@ -137,6 +141,7 @@ def test_rag_routing_service_offline_downgrades_to_local_model(client, monkeypat
     mock_rag_client.has_indexed_documents.return_value = (False, "rag_service_offline")
 
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     payload = {
@@ -158,13 +163,17 @@ def test_bypass_router_header_prevents_infinite_loop(client, monkeypatch):
     """X-Bypass-Router: true skips intent routing completely, enabling RAG service to call gateway."""
     mock_rag_client = AsyncMock(spec=RAGClient)
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
 
     # A query that would otherwise trigger RAG
     payload = {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Context: [1] Source: doc.pdf\nUPF routes packets.\n\nQuestion: What does UPF do?"},
+            {
+                "role": "user",
+                "content": "Context: [1] Source: doc.pdf\nUPF routes packets.\n\nQuestion: What does UPF do?",
+            },
         ]
     }
     resp = client.post(

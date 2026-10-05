@@ -1,7 +1,8 @@
 """Dense embedding model using BAAI/bge-small-en-v1.5 per Section 5.5."""
 
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 

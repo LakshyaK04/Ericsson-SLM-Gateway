@@ -1,11 +1,8 @@
 """Unit tests for IntentRouter (BAAI/bge-small-en-v1.5 and exemplar banks)."""
 
-import pytest
-from pathlib import Path
 import numpy as np
-
-from slm_gateway.config import Settings
-from slm_gateway.router import IntentRouter, RoutingResult, get_router, DEFAULT_INTENTS_PATH
+import pytest
+from slm_gateway.router import DEFAULT_INTENTS_PATH, RoutingResult, get_router
 
 
 @pytest.fixture(scope="module")
@@ -17,14 +14,19 @@ def router():
 def test_intents_yaml_contains_all_intents_with_minimum_exemplars():
     """Verify intents.yaml contains at least 25 exemplars per intent."""
     import yaml
+
     with open(DEFAULT_INTENTS_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     expected_intents = {"general", "technical", "rag"}
-    assert set(data.keys()) == expected_intents, f"Expected intents {expected_intents}, got {set(data.keys())}"
+    assert set(data.keys()) == expected_intents, (
+        f"Expected intents {expected_intents}, got {set(data.keys())}"
+    )
 
     for intent, examples in data.items():
-        assert len(examples) >= 25, f"Intent {intent} has only {len(examples)} examples (required >= 25)"
+        assert len(examples) >= 25, (
+            f"Intent {intent} has only {len(examples)} examples (required >= 25)"
+        )
 
 
 def test_router_initialization(router):

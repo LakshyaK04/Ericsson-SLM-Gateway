@@ -2,13 +2,43 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  test:
-    name: Unit & Integration Tests
+  lint:
+    name: Code Quality & Type Checks
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --all-packages --all-groups
+
+      - name: Run Ruff Lint Check
+        run: uv run ruff check .
+
+      - name: Run Ruff Format Check
+        run: uv run ruff format --check .
+
+      - name: Run Mypy Type Check
+        run: uv run mypy gateway/src rag/src
+
+  test:
+    name: Unit & Integration Tests (Coverage)
+    runs-on: ubuntu-latest
+    needs: lint
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,11 +63,50 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-packages --all-groups
 
-      - name: Run Test Suite (Non-slow)
-        run: uv run pytest gateway/tests rag/tests -m "not slow" -v --tb=short
+      - name: Run Test Suite with Coverage
+        run: uv run pytest gateway/tests rag/tests -m "not slow" -v --tb=short --cov=slm_gateway --cov=rag_service --cov-report=term-missing --cov-report=xml
 
       - name: Run PII Redaction Evaluation
         run: uv run python eval/pii_eval.py
 
       - name: Run Intent Router Evaluation
         run: uv run python eval/router_eval.py
+
+  docker-smoke:
+    name: Docker Compose Build & Smoke Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Start services with lightweight mock backend
+        env:
+          BACKEND: openai_compatible
+          BACKEND_URL: http://localhost:8000
+          MODEL_ID: mock-slm-model
+          PII_FAIL_MODE: closed
+        run: docker compose up -d
+
+      - name: Verify service health probes
+        run: |
+          echo "Waiting for services to become healthy..."
+          for i in {1..30}; do
+            rag_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/health || true)
+            gw_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
+            echo "Attempt $i: RAG=$rag_code, Gateway=$gw_code"
+            if [ "$rag_code" = "200" ] && [ "$gw_code" = "200" ]; then
+              echo "Both services are healthy!"
+              break
+            fi
+            sleep 2
+          done
+          curl -f http://localhost:8001/health
+          curl -f http://localhost:8000/health
+
+      - name: Teardown Docker Compose
+        if: always()
+        run: docker compose down -v

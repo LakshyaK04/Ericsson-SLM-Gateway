@@ -8,10 +8,9 @@ Executes a 4-scene live demonstration:
 """
 
 import argparse
-import json
-from pathlib import Path
-import sys
 import time
+from pathlib import Path
+
 import httpx
 
 GATEWAY_DEFAULT_URL = "http://localhost:8000"
@@ -54,9 +53,7 @@ def demo_standard_chat(gateway_url: str):
 
     payload = {
         "model": "microsoft/Phi-3-mini-4k-instruct",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
         "max_tokens": 128,
     }
@@ -82,13 +79,11 @@ def demo_pii_redaction(gateway_url: str):
         "alice.smith@company.com or +1-555-0199. I work at the headquarters in Stockholm."
     )
     print("[*] Original Inbound User Query:")
-    print(f"    \"{prompt}\"")
+    print(f'    "{prompt}"')
     print("\n[*] Sending query through Gateway /v1/chat/completions...")
 
     payload = {
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 64,
     }
 
@@ -127,13 +122,11 @@ def demo_rag_pipeline(gateway_url: str, rag_url: str):
         "According to the uploaded documentation, what capabilities does the "
         "Enterprise AI Platform provide for enterprise deployments?"
     )
-    print(f"\n[*] Querying through Gateway (Front Door Port 8000):")
-    print(f"    \"{query}\"")
+    print("\n[*] Querying through Gateway (Front Door Port 8000):")
+    print(f'    "{query}"')
 
     payload = {
-        "messages": [
-            {"role": "user", "content": query}
-        ],
+        "messages": [{"role": "user", "content": query}],
         "max_tokens": 150,
     }
 
@@ -164,18 +157,31 @@ def demo_chunking_comparison():
         return
 
     import csv
+
     with open(csv_file, "r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
     print("\nEmpirical Chunking Strategy & Re-Ranking Results:")
-    print("(Tested on small synthetic set of 3 PDFs / 5 pages from scripts/create_eval_docs.py and 36 questions)\n")
-    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
-    print(f"| {'Strategy':<11} | {'Re-ranker':<9} | {'Total Chunks':<12} | {'Avg Length':<10} | {'Hit@1 (%)':<9} | {'Hit@3 (%)':<9} | {'MRR':<6} | {'Latency (ms)':<12} |")
-    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
+    print(
+        "(Tested on small synthetic set of 3 PDFs / 5 pages from scripts/create_eval_docs.py and 36 questions)\n"
+    )
+    print(
+        f"+{'-' * 13}+{'-' * 11}+{'-' * 14}+{'-' * 12}+{'-' * 11}+{'-' * 11}+{'-' * 8}+{'-' * 14}+"
+    )
+    print(
+        f"| {'Strategy':<11} | {'Re-ranker':<9} | {'Total Chunks':<12} | {'Avg Length':<10} | {'Hit@1 (%)':<9} | {'Hit@3 (%)':<9} | {'MRR':<6} | {'Latency (ms)':<12} |"
+    )
+    print(
+        f"+{'-' * 13}+{'-' * 11}+{'-' * 14}+{'-' * 12}+{'-' * 11}+{'-' * 11}+{'-' * 8}+{'-' * 14}+"
+    )
     for r in rows:
         lat = f"{float(r['Avg Latency (ms)']):.1f} ms"
-        print(f"| {r['Strategy']:<11} | {r['Reranker']:<9} | {r['Total Chunks']:<12} | {r['Avg Length (chars)'] + ' ch':<10} | {float(r['Hit@1 (%)']):.2f}%{' ': <3}| {float(r['Hit@3 (%)']):.2f}%{' ': <3}| {float(r['MRR']):.4f} | {lat:<12} |")
-    print(f"+{'-'*13}+{'-'*11}+{'-'*14}+{'-'*12}+{'-'*11}+{'-'*11}+{'-'*8}+{'-'*14}+")
+        print(
+            f"| {r['Strategy']:<11} | {r['Reranker']:<9} | {r['Total Chunks']:<12} | {r['Avg Length (chars)'] + ' ch':<10} | {float(r['Hit@1 (%)']):.2f}%{' ': <3}| {float(r['Hit@3 (%)']):.2f}%{' ': <3}| {float(r['MRR']):.4f} | {lat:<12} |"
+        )
+    print(
+        f"+{'-' * 13}+{'-' * 11}+{'-' * 14}+{'-' * 12}+{'-' * 11}+{'-' * 11}+{'-' * 8}+{'-' * 14}+"
+    )
     print("""
 Observations:
 1. Re-ranking improved structure chunking (Hit@1: 94.44% -> 100.00%) and semantic chunking (Hit@1: 88.89% -> 94.44%).
@@ -201,7 +207,9 @@ def main():
 
     if not check_services(args.gateway_url, args.rag_url):
         print("\n[!] Could not connect to running services.")
-        print("[!] Ensure Gateway (port 8000) and RAG (port 8001) are running, or run with --benchmark-only.")
+        print(
+            "[!] Ensure Gateway (port 8000) and RAG (port 8001) are running, or run with --benchmark-only."
+        )
         print("[*] Displaying empirical evaluation results instead:\n")
         demo_chunking_comparison()
         return

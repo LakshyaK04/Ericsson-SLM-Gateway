@@ -1,12 +1,10 @@
 """Unit tests for character, structure, and semantic chunking strategies."""
 
-import pytest
+from rag_service.chunking import chunk_document
 from rag_service.chunking.base import Chunk
 from rag_service.chunking.character import character_chunking, split_character_text
-from rag_service.chunking.structure import structure_chunking, split_structure_text
-from rag_service.chunking.semantic import semantic_chunking, split_semantic_text
-from rag_service.chunking import chunk_document
-
+from rag_service.chunking.semantic import semantic_chunking
+from rag_service.chunking.structure import split_structure_text, structure_chunking
 
 FIXED_TEXT = (
     "The quick brown fox jumps over the lazy dog. "
@@ -44,7 +42,9 @@ def test_character_chunking_snaps_whitespace_and_overlaps():
         assert not c.endswith(" ")
 
     # Assert consecutive chunks share overlapping tokens
-    chunk_objects = character_chunking(FIXED_TEXT, source="test.pdf", page=1, chunk_size=chunk_size, overlap=overlap)
+    chunk_objects = character_chunking(
+        FIXED_TEXT, source="test.pdf", page=1, chunk_size=chunk_size, overlap=overlap
+    )
     assert len(chunk_objects) == len(chunks)
     assert all(isinstance(c, Chunk) for c in chunk_objects)
     assert all(c.strategy == "character" for c in chunk_objects)
@@ -72,7 +72,9 @@ def test_structure_chunking_splits_on_headings_and_merges():
     assert all(len(c.strip()) > 0 for c in chunks)
 
     # Test Chunk dataclass output
-    chunk_objects = structure_chunking(STRUCTURED_TEXT, source="arch.docx", page=2, max_chunk_size=150)
+    chunk_objects = structure_chunking(
+        STRUCTURED_TEXT, source="arch.docx", page=2, max_chunk_size=150
+    )
     assert len(chunk_objects) == len(chunks)
     assert all(c.strategy == "structure" for c in chunk_objects)
     assert all(c.page == 2 for c in chunk_objects)
@@ -91,9 +93,9 @@ def test_structure_chunking_splits_oversized_section():
 
 class MockEmbeddingModel:
     """Fast mock embedding model for unit testing semantic chunking."""
+
     def encode_documents(self, sentences):
         # Deterministic 4-dim embeddings: first 2 sentences close, 3rd sentence distant
-        import numpy as np
         emb = []
         for i, s in enumerate(sentences):
             if i < 2:

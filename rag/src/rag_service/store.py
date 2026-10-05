@@ -6,13 +6,12 @@ Per Section 5.5:
 - Persisted on disk so service restarts retain all index data.
 """
 
-from collections import defaultdict
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import chromadb
-from chromadb.config import Settings as ChromaSettings
 
 from .chunking.base import Chunk
 from .config import Settings, settings
@@ -59,7 +58,9 @@ class ChromaStore:
     ) -> int:
         """Add chunks and embeddings to the collection for the specified strategy."""
         if strategy not in self.collections:
-            raise ValueError(f"Unknown strategy: '{strategy}'. Supported: {list(self.collections.keys())}")
+            raise ValueError(
+                f"Unknown strategy: '{strategy}'. Supported: {list(self.collections.keys())}"
+            )
 
         if not chunks:
             return 0
@@ -119,7 +120,9 @@ class ChromaStore:
         Returns list of matching chunks with dense cosine similarity scores (1 - distance).
         """
         if strategy not in self.collections:
-            raise ValueError(f"Unknown strategy: '{strategy}'. Supported: {list(self.collections.keys())}")
+            raise ValueError(
+                f"Unknown strategy: '{strategy}'. Supported: {list(self.collections.keys())}"
+            )
 
         col = self.collections[strategy]
         col_count = col.count()
@@ -151,15 +154,17 @@ class ChromaStore:
             for c_id, doc, meta, dist in zip(ids, docs, metas, dists):
                 # Cosine space: distance in [0, 2], similarity = 1 - (dist / 2) or 1 - dist
                 dense_score = max(0.0, float(1.0 - dist))
-                matches.append({
-                    "chunk_id": c_id,
-                    "text": doc,
-                    "source": meta.get("source", ""),
-                    "page": meta.get("page", 1),
-                    "strategy": meta.get("strategy", strategy),
-                    "dense_score": round(dense_score, 4),
-                    "doc_id": meta.get("doc_id", ""),
-                })
+                matches.append(
+                    {
+                        "chunk_id": c_id,
+                        "text": doc,
+                        "source": meta.get("source", ""),
+                        "page": meta.get("page", 1),
+                        "strategy": meta.get("strategy", strategy),
+                        "dense_score": round(dense_score, 4),
+                        "doc_id": meta.get("doc_id", ""),
+                    }
+                )
 
         return matches
 
@@ -181,12 +186,14 @@ class ChromaStore:
 
         docs = []
         for d_id, data in doc_summary.items():
-            docs.append({
-                "doc_id": d_id,
-                "source": data["source"],
-                "strategies": sorted(list(data["strategies"])),
-                "total_chunks": data["total_chunks"],
-            })
+            docs.append(
+                {
+                    "doc_id": d_id,
+                    "source": data["source"],
+                    "strategies": sorted(list(data["strategies"])),
+                    "total_chunks": data["total_chunks"],
+                }
+            )
         return docs
 
     def delete_document(self, doc_id: str) -> int:
@@ -196,7 +203,7 @@ class ChromaStore:
             before_count = col.count()
             col.delete(where={"doc_id": doc_id})
             after_count = col.count()
-            total_deleted += (before_count - after_count)
+            total_deleted += before_count - after_count
         return total_deleted
 
     def get_all_chunks(self, strategy: str) -> List[Dict[str, Any]]:
@@ -210,14 +217,16 @@ class ChromaStore:
         chunks = []
         if data and data["ids"]:
             for cid, doc, meta in zip(data["ids"], data["documents"], data["metadatas"]):
-                chunks.append({
-                    "chunk_id": cid,
-                    "text": doc,
-                    "source": meta.get("source", ""),
-                    "page": meta.get("page", 1),
-                    "strategy": meta.get("strategy", strategy),
-                    "doc_id": meta.get("doc_id", ""),
-                })
+                chunks.append(
+                    {
+                        "chunk_id": cid,
+                        "text": doc,
+                        "source": meta.get("source", ""),
+                        "page": meta.get("page", 1),
+                        "strategy": meta.get("strategy", strategy),
+                        "doc_id": meta.get("doc_id", ""),
+                    }
+                )
         return chunks
 
     def count(self, strategy: Optional[str] = None) -> int:

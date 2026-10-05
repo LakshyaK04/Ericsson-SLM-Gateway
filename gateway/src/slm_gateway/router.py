@@ -4,16 +4,16 @@ Scores inbound queries against exemplars in intents.yaml and determines the
 target route, system prompt modifications, and metadata.
 """
 
-from dataclasses import dataclass, field
 import logging
-from pathlib import Path
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+import yaml
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-import yaml
 
 from .config import Settings, settings
 
@@ -25,6 +25,7 @@ DEFAULT_INTENTS_PATH = Path(__file__).parent / "intents.yaml"
 @dataclass
 class RoutingResult:
     """Detailed result of an intent routing classification."""
+
     intent: str
     confidence: float
     route: str
@@ -57,7 +58,7 @@ class IntentRouter:
     ):
         self.config = config or settings
         self.threshold = float(self.config.ROUTER_THRESHOLD)
-        
+
         if intents_path:
             self.intents_path = Path(intents_path)
         elif self.config.INTENTS_FILE:
@@ -66,10 +67,10 @@ class IntentRouter:
             self.intents_path = DEFAULT_INTENTS_PATH
 
         self.model_name = getattr(self.config, "ROUTER_MODEL_NAME", "BAAI/bge-small-en-v1.5")
-        
+
         # Load exemplar bank
         self.intent_examples: Dict[str, List[str]] = self._load_intents()
-        
+
         # Load or attach SentenceTransformer model
         if model is not None:
             self.model = model

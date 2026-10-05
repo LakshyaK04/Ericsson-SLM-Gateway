@@ -1,10 +1,10 @@
 """Tests for grounded generation and /answer endpoint in RAG service."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi.testclient import TestClient
-import httpx
+from unittest.mock import AsyncMock, MagicMock
 
+import httpx
+import pytest
+from fastapi.testclient import TestClient
 from rag_service.config import Settings
 from rag_service.generation import format_context_blocks, generate_grounded_answer
 from rag_service.main import app
@@ -119,10 +119,12 @@ def test_answer_endpoint(monkeypatch):
     ]
 
     import rag_service.main as main_mod
+
     main_mod.retriever = mock_retriever
 
     async def mock_generate(query, chunks, config=None, client=None):
         from rag_service.schemas import AnswerResponse, SourceItem, UsageInfo
+
         return AnswerResponse(
             answer="Grounded answer based on [1].",
             sources=[
@@ -160,9 +162,33 @@ def test_apply_token_budget_guard():
     from rag_service.schemas import QueryResultItem
 
     chunks = [
-        QueryResultItem(chunk_id="c1", text="Chunk one content about 5G radio access network.", source="doc.pdf", page=1, strategy="structure", dense_score=0.9, rerank_score=0.95),
-        QueryResultItem(chunk_id="c2", text="Chunk two content about core UPF user plane function.", source="doc.pdf", page=2, strategy="structure", dense_score=0.8, rerank_score=0.85),
-        QueryResultItem(chunk_id="c3", text="Chunk three content about network slice management.", source="doc.pdf", page=3, strategy="structure", dense_score=0.7, rerank_score=0.75),
+        QueryResultItem(
+            chunk_id="c1",
+            text="Chunk one content about 5G radio access network.",
+            source="doc.pdf",
+            page=1,
+            strategy="structure",
+            dense_score=0.9,
+            rerank_score=0.95,
+        ),
+        QueryResultItem(
+            chunk_id="c2",
+            text="Chunk two content about core UPF user plane function.",
+            source="doc.pdf",
+            page=2,
+            strategy="structure",
+            dense_score=0.8,
+            rerank_score=0.85,
+        ),
+        QueryResultItem(
+            chunk_id="c3",
+            text="Chunk three content about network slice management.",
+            source="doc.pdf",
+            page=3,
+            strategy="structure",
+            dense_score=0.7,
+            rerank_score=0.75,
+        ),
     ]
 
     # Generous budget keeps all chunks
@@ -171,11 +197,14 @@ def test_apply_token_budget_guard():
     assert "[1]" in block_all and "[2]" in block_all and "[3]" in block_all
 
     # Budget sized to fit only chunk 1
-    from rag_service.generation import count_tokens, SYSTEM_PROMPT
+    from rag_service.generation import SYSTEM_PROMPT, count_tokens
+
     base_t = count_tokens(f"{SYSTEM_PROMPT}\nQuestion: What is 5G?\n\nContext:\n\n\nAnswer:")
     c1_tokens = count_tokens(f"[1] Source: doc.pdf (Page 1)\n{chunks[0].text.strip()}")
 
-    kept_one, block_one = apply_token_budget_guard(chunks, max_budget=base_t + c1_tokens + 5, query="What is 5G?")
+    kept_one, block_one = apply_token_budget_guard(
+        chunks, max_budget=base_t + c1_tokens + 5, query="What is 5G?"
+    )
     assert len(kept_one) == 1
     assert kept_one[0].chunk_id == "c1"
     assert "[2]" not in block_one
@@ -185,12 +214,19 @@ def test_apply_token_budget_guard():
 async def test_insufficient_context_refusal():
     """generate_grounded_answer returns refusal when top reranker score is below threshold."""
     from rag_service.generation import generate_grounded_answer
-    from rag_service.config import Settings
     from rag_service.schemas import QueryResultItem
 
     cfg = Settings(RERANKER_REFUSAL_THRESHOLD=0.5)
     low_score_chunks = [
-        QueryResultItem(chunk_id="c_low", text="Completely irrelevant topic.", source="doc.pdf", page=1, strategy="structure", dense_score=0.2, rerank_score=0.15)
+        QueryResultItem(
+            chunk_id="c_low",
+            text="Completely irrelevant topic.",
+            source="doc.pdf",
+            page=1,
+            strategy="structure",
+            dense_score=0.2,
+            rerank_score=0.15,
+        )
     ]
 
     resp = await generate_grounded_answer(
@@ -198,7 +234,10 @@ async def test_insufficient_context_refusal():
         chunks=low_score_chunks,
         config=cfg,
     )
-    assert resp.answer == "The provided documents do not contain enough information to answer this question."
+    assert (
+        resp.answer
+        == "The provided documents do not contain enough information to answer this question."
+    )
     assert len(resp.sources) == 1
     assert resp.usage.total_tokens == 0
 
@@ -206,19 +245,29 @@ async def test_insufficient_context_refusal():
 def test_answer_endpoint_streaming(monkeypatch):
     """POST /answer with stream=True returns StreamingResponse with text/event-stream media type."""
     from unittest.mock import MagicMock
+
     from rag_service.schemas import QueryResultItem
 
     client = TestClient(app)
     mock_retriever = MagicMock()
     mock_retriever.retrieve.return_value = [
-        QueryResultItem(chunk_id="c1", text="Sample content.", source="doc.pdf", page=1, strategy="structure", dense_score=0.9, rerank_score=0.9)
+        QueryResultItem(
+            chunk_id="c1",
+            text="Sample content.",
+            source="doc.pdf",
+            page=1,
+            strategy="structure",
+            dense_score=0.9,
+            rerank_score=0.9,
+        )
     ]
     import rag_service.main as main_mod
+
     main_mod.retriever = mock_retriever
 
     async def mock_stream_answer(query, chunks, config=None, client=None, request_id=None):
-        yield "data: {\"choices\": [{\"delta\": {\"role\": \"assistant\", \"content\": \"\"}}]}\n\n"
-        yield "data: {\"choices\": [{\"delta\": {\"content\": \"Streamed answer.\"}}]}\n\n"
+        yield 'data: {"choices": [{"delta": {"role": "assistant", "content": ""}}]}\n\n'
+        yield 'data: {"choices": [{"delta": {"content": "Streamed answer."}}]}\n\n'
         yield "data: [DONE]\n\n"
 
     monkeypatch.setattr(main_mod, "stream_grounded_answer", mock_stream_answer)
@@ -228,4 +277,3 @@ def test_answer_endpoint_streaming(monkeypatch):
     assert "text/event-stream" in resp.headers["content-type"]
     assert "Streamed answer." in resp.text
     assert "[DONE]" in resp.text
-

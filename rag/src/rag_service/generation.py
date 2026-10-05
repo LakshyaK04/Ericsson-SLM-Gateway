@@ -11,7 +11,8 @@ Per Section 5.5 and Section 6 (Phase 6):
 import json
 import logging
 import re
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import AsyncGenerator, List, Optional, Tuple
+
 import httpx
 
 from .config import Settings, settings
@@ -40,6 +41,7 @@ def get_tokenizer():
         _tokenizer_init_attempted = True
         try:
             from transformers import AutoTokenizer
+
             _cached_tokenizer = AutoTokenizer.from_pretrained(
                 settings.GATEWAY_MODEL,
                 trust_remote_code=True,
@@ -105,9 +107,14 @@ def apply_token_budget_guard(
             trimmed_block = f"[{idx}] Source: {c.source} (Page {c.page})\n{trimmed_text} [trimmed for token budget]"
             logger.warning(
                 "Token budget guard: top chunk %s trimmed from %d to %d tokens to fit within %d token budget.",
-                c.chunk_id, chunk_tokens, count_tokens(trimmed_block), max_budget,
+                c.chunk_id,
+                chunk_tokens,
+                count_tokens(trimmed_block),
+                max_budget,
             )
-            trimmed_chunk = c.model_copy(update={"text": trimmed_text + " [trimmed for token budget]"})
+            trimmed_chunk = c.model_copy(
+                update={"text": trimmed_text + " [trimmed for token budget]"}
+            )
             accepted_chunks.append(trimmed_chunk)
             formatted_blocks.append(trimmed_block)
             remaining_tokens = 0
@@ -115,7 +122,11 @@ def apply_token_budget_guard(
         else:
             logger.info(
                 "Token budget guard: dropped chunk %s (rank %d, %d tokens) to stay within %d token budget (remaining: %d).",
-                c.chunk_id, idx, chunk_tokens, max_budget, remaining_tokens,
+                c.chunk_id,
+                idx,
+                chunk_tokens,
+                max_budget,
+                remaining_tokens,
             )
             break
 
@@ -184,7 +195,9 @@ async def generate_grounded_answer(
 
     # 3. Apply token budget guard
     max_budget = getattr(cfg, "RAG_MAX_CONTEXT_TOKENS", 3072)
-    budgeted_chunks, context_str = apply_token_budget_guard(chunks, max_budget=max_budget, query=query)
+    budgeted_chunks, context_str = apply_token_budget_guard(
+        chunks, max_budget=max_budget, query=query
+    )
     budgeted_sources = _to_source_items(budgeted_chunks)
 
     user_content = f"Question: {query}\n\nContext:\n{context_str}\n\nAnswer:"
@@ -269,7 +282,9 @@ async def stream_grounded_answer(
 
     # 1. Refusal case: no chunks
     if not chunks:
-        refusal_msg = "The provided documents do not contain enough information to answer this question."
+        refusal_msg = (
+            "The provided documents do not contain enough information to answer this question."
+        )
         yield f"data: {json.dumps({'choices': [{'delta': {'role': 'assistant', 'content': ''}}], 'x_sources': []})}\n\n"
         yield f"data: {json.dumps({'choices': [{'delta': {'content': refusal_msg}}]})}\n\n"
         yield "data: [DONE]\n\n"
@@ -284,7 +299,9 @@ async def stream_grounded_answer(
                 chunks[0].rerank_score,
                 refusal_threshold,
             )
-            refusal_msg = "The provided documents do not contain enough information to answer this question."
+            refusal_msg = (
+                "The provided documents do not contain enough information to answer this question."
+            )
             sources_dicts = [s.model_dump() for s in sources]
             yield f"data: {json.dumps({'choices': [{'delta': {'role': 'assistant', 'content': ''}}], 'x_sources': sources_dicts})}\n\n"
             yield f"data: {json.dumps({'choices': [{'delta': {'content': refusal_msg}}]})}\n\n"
@@ -293,7 +310,9 @@ async def stream_grounded_answer(
 
     # 3. Apply token budget guard
     max_budget = getattr(cfg, "RAG_MAX_CONTEXT_TOKENS", 3072)
-    budgeted_chunks, context_str = apply_token_budget_guard(chunks, max_budget=max_budget, query=query)
+    budgeted_chunks, context_str = apply_token_budget_guard(
+        chunks, max_budget=max_budget, query=query
+    )
     budgeted_sources = _to_source_items(budgeted_chunks)
     sources_dicts = [s.model_dump() for s in budgeted_sources]
 

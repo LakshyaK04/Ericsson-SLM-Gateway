@@ -104,9 +104,7 @@ client = OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed")
 
 response = client.chat.completions.create(
     model="microsoft/Phi-3-mini-4k-instruct",
-    messages=[
-        {"role": "user", "content": "Explain 5G network slicing."}
-    ],
+    messages=[{"role": "user", "content": "Explain 5G network slicing."}],
     temperature=0.7,
     max_tokens=128,
 )

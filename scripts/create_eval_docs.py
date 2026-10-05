@@ -1,11 +1,13 @@
 """Generate clean, rich, multi-page technical PDFs for evaluation."""
 
 from pathlib import Path
+
 import fitz  # PyMuPDF
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = REPO_ROOT / "eval" / "docs"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def create_pdf(path: Path, pages: list[str]):
     doc = fitz.open()
@@ -16,6 +18,7 @@ def create_pdf(path: Path, pages: list[str]):
     doc.save(path)
     doc.close()
     print(f"Created {path}")
+
 
 doc2_pages = [
     """5G Core Network Architecture Overview
@@ -49,7 +52,7 @@ Standard SST values defined by 3GPP include:
 - SST 2: Ultra-Reliable Low-Latency Communication (URLLC) with sub-millisecond radio transit time.
 - SST 3: Massive Machine Type Communication (mMTC) supporting high connection density for IoT sensors.
 
-The Policy Control Function (PCF) provides unified policy rules to control plane functions and governs dynamic QoS."""
+The Policy Control Function (PCF) provides unified policy rules to control plane functions and governs dynamic QoS.""",
 ]
 
 doc3_pages = [
@@ -76,7 +79,7 @@ Telecom cloud infrastructure operates under a Zero-Trust Architecture (ZTA). Int
 Observability is provided through OpenTelemetry standards:
 - Metrics collection via Prometheus pull endpoints.
 - Distributed tracing using W3C TraceContext propagation across asynchronous message queues.
-- Real-time packet telemetry collected via eBPF probes for anomaly detection."""
+- Real-time packet telemetry collected via eBPF probes for anomaly detection.""",
 ]
 
 doc1_pages = [
@@ -110,7 +113,6 @@ Cluster Timing Invariants:
 - Heartbeat Interval: Default is 50 ms (must be substantially smaller than broadcast time).
 - Election Timeout: Randomized window between 150 ms and 300 ms to break split-vote ties.
 - Client Port: 2379 for client requests; Peer Port: 2380 for inter-node raft replication.""",
-
     """Section 2. Log Replication Protocol & Quorum Invariants
 
 When the leader receives a state transition command from a client, it assigns a monotonic log index and the current term number. The entry is appended to its local log and broadcast via AppendEntries RPCs.
@@ -130,7 +132,6 @@ Log Matching Property & Invariants:
 Error Codes and Handling:
 - ERR_TERM_OUTDATED (Code 4010): Returned when a sender's term is lower than the receiver's currentTerm; the sender immediately steps down to follower.
 - ERR_LOG_DIVERGENCE (Code 4020): Returned when the receiver's log does not contain an entry matching prevLogIndex and prevLogTerm; the leader decrements nextIndex and retries.""",
-
     """Section 3. Joint Consensus, Log Compaction, and Snapshotting
 
 Cluster Membership Changes:
@@ -143,7 +144,7 @@ Unbounded log growth exhausts memory and disk storage. Raft utilizes asynchronou
 3. InstallSnapshot RPC: Invoked when a lagging follower's nextIndex falls behind the leader's oldest compacted WAL entry.
 
 Fault Tolerance Guarantees:
-A Raft cluster of N nodes maintains availability and linearizable read/write consistency under up to F = floor((N - 1) / 2) concurrent failures, verified against Jepsen network partition test suites."""
+A Raft cluster of N nodes maintains availability and linearizable read/write consistency under up to F = floor((N - 1) / 2) concurrent failures, verified against Jepsen network partition test suites.""",
 ]
 
 create_pdf(DOCS_DIR / "enterprise_rag_sample.pdf", doc1_pages)

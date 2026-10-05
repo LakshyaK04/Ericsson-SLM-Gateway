@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any, Dict, List, Optional
-import numpy as np
+
 from sentence_transformers import CrossEncoder
 
 from .config import Settings, settings

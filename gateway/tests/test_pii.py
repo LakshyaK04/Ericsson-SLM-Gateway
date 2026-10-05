@@ -2,11 +2,10 @@
 
 import pytest
 from fastapi.testclient import TestClient
-
-from slm_gateway.config import Settings, settings
-from slm_gateway.main import app
-from slm_gateway.pii import PIIRedactionError, PIIRedactor, redact_pii
 from slm_gateway.backends.base import LLMBackend
+from slm_gateway.config import Settings
+from slm_gateway.main import app
+from slm_gateway.pii import PIIRedactionError, PIIRedactor
 
 
 class RecordingMockBackend(LLMBackend):
@@ -62,6 +61,7 @@ def redactor():
 # 1. Table-Driven Tests for Each Entity Type
 # ============================================================
 
+
 @pytest.mark.parametrize(
     "input_text,expected_placeholder,entity_type",
     [
@@ -71,15 +71,25 @@ def redactor():
         ("Connect to 192.168.1.100 port 22.", "<IP_ADDRESS>", "IP_ADDRESS"),
         ("Employee EMP-12345 reported for duty.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
         ("Employee EMP-9876543 submitted the report.", "<EMPLOYEE_ID>", "EMPLOYEE_ID"),
-        ("Project Phoenix is scheduled for delivery next quarter.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
-        ("The Titan initiative has been approved by the board.", "<PROJECT_CODENAME>", "PROJECT_CODENAME"),
+        (
+            "Project Phoenix is scheduled for delivery next quarter.",
+            "<PROJECT_CODENAME>",
+            "PROJECT_CODENAME",
+        ),
+        (
+            "The Titan initiative has been approved by the board.",
+            "<PROJECT_CODENAME>",
+            "PROJECT_CODENAME",
+        ),
     ],
 )
 def test_pii_entity_redaction(redactor, input_text, expected_placeholder, entity_type):
     """Verify that each target entity is detected and replaced with typed placeholder."""
     redacted_text, count = redactor.redact(input_text)
     assert count >= 1, f"Expected at least 1 redaction for {entity_type} in '{input_text}'"
-    assert expected_placeholder in redacted_text, f"Expected {expected_placeholder} in '{redacted_text}'"
+    assert expected_placeholder in redacted_text, (
+        f"Expected {expected_placeholder} in '{redacted_text}'"
+    )
 
 
 def test_person_redaction(redactor):
@@ -94,6 +104,7 @@ def test_person_redaction(redactor):
 # ============================================================
 # 2. No-False-Positive Tests (Locations, Dates, Normal Text)
 # ============================================================
+
 
 @pytest.mark.parametrize(
     "query",
@@ -115,6 +126,7 @@ def test_no_false_positives_on_normal_queries(redactor, query):
 # ============================================================
 # 3. Fail-Closed vs Fail-Open Behavior Tests
 # ============================================================
+
 
 def test_fail_closed_raises_error_when_redaction_fails(monkeypatch):
     """In fail-closed mode, errors during redaction must raise PIIRedactionError."""
@@ -149,6 +161,7 @@ def test_fail_open_passes_through_on_error(monkeypatch):
 # ============================================================
 # 4. End-to-End Test: Backend Never Receives Raw PII
 # ============================================================
+
 
 def test_end_to_end_gateway_pii_redaction(monkeypatch):
     """Verify gateway masks user messages before passing payload to LLM backend."""
@@ -201,7 +214,6 @@ def test_end_to_end_gateway_pii_redaction(monkeypatch):
     assert "<EMPLOYEE_ID>" in received_text
 
 
-
 def test_gateway_fail_closed_returns_500(monkeypatch):
     """If PII redaction fails in fail-closed mode, gateway returns HTTP 500 error."""
     mock_backend = RecordingMockBackend()
@@ -220,11 +232,7 @@ def test_gateway_fail_closed_returns_500(monkeypatch):
     app.state.pii_redactor = failing_instance
 
     client = TestClient(app, raise_server_exceptions=False)
-    payload = {
-        "messages": [
-            {"role": "user", "content": "Call me at +1-555-123-4567"}
-        ]
-    }
+    payload = {"messages": [{"role": "user", "content": "Call me at +1-555-123-4567"}]}
 
     response = client.post("/v1/chat/completions", json=payload)
     assert response.status_code == 500
@@ -238,9 +246,9 @@ def test_gateway_fail_closed_returns_500(monkeypatch):
 @pytest.mark.asyncio
 async def test_gateway_lifespan_fail_closed_aborts_startup(monkeypatch):
     """When PII_FAIL_MODE is closed and PII redactor initialization fails, lifespan must abort with RuntimeError."""
-    from slm_gateway.main import lifespan
-    from fastapi import FastAPI
     import slm_gateway.main as main_mod
+    from fastapi import FastAPI
+    from slm_gateway.main import lifespan
 
     test_app = FastAPI()
     test_app.state.backend = RecordingMockBackend()
@@ -260,9 +268,9 @@ async def test_gateway_lifespan_fail_closed_aborts_startup(monkeypatch):
 @pytest.mark.asyncio
 async def test_gateway_lifespan_fail_open_continues_with_warning(monkeypatch):
     """When PII_FAIL_MODE is open and PII redactor initialization fails, lifespan must log warning and continue."""
-    from slm_gateway.main import lifespan
-    from fastapi import FastAPI
     import slm_gateway.main as main_mod
+    from fastapi import FastAPI
+    from slm_gateway.main import lifespan
 
     test_app = FastAPI()
     test_app.state.backend = RecordingMockBackend()
@@ -315,4 +323,3 @@ def test_chat_completions_redacts_system_and_assistant_messages(monkeypatch):
 
     assert "EMP-99999" not in user_msg["content"]
     assert "<EMPLOYEE_ID>" in user_msg["content"]
-

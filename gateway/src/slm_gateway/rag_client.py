@@ -6,7 +6,8 @@ Handles document presence checks, answer requests, and graceful failure fallback
 
 import json
 import logging
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple
+
 import httpx
 
 from .config import Settings, settings
@@ -17,7 +18,9 @@ logger = logging.getLogger(__name__)
 class RAGClient:
     """Client for RAG microservice communication."""
 
-    def __init__(self, config: Optional[Settings] = None, client: Optional[httpx.AsyncClient] = None):
+    def __init__(
+        self, config: Optional[Settings] = None, client: Optional[httpx.AsyncClient] = None
+    ):
         self.config = config or settings
         self.base_url = self.config.RAG_SERVICE_URL.rstrip("/")
         self.timeout = self.config.RAG_TIMEOUT_SECONDS
@@ -34,7 +37,9 @@ class RAGClient:
     async def _get_client(self) -> httpx.AsyncClient:
         return self._external_client or httpx.AsyncClient()
 
-    async def has_indexed_documents(self, request_id: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    async def has_indexed_documents(
+        self, request_id: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
         """Check whether the RAG service is online and has indexed documents.
 
         Returns:
@@ -44,7 +49,9 @@ class RAGClient:
         headers = self._get_headers(request_id)
         try:
             if self._external_client:
-                resp = await self._external_client.get(endpoint, headers=headers, timeout=self.timeout)
+                resp = await self._external_client.get(
+                    endpoint, headers=headers, timeout=self.timeout
+                )
             else:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(endpoint, headers=headers, timeout=self.timeout)
@@ -94,10 +101,14 @@ class RAGClient:
 
         try:
             if self._external_client:
-                resp = await self._external_client.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
+                resp = await self._external_client.post(
+                    endpoint, json=payload, headers=headers, timeout=self.timeout
+                )
             else:
                 async with httpx.AsyncClient() as client:
-                    resp = await client.post(endpoint, json=payload, headers=headers, timeout=self.timeout)
+                    resp = await client.post(
+                        endpoint, json=payload, headers=headers, timeout=self.timeout
+                    )
 
             if resp.status_code != 200:
                 logger.warning("RAG service /answer returned status %d", resp.status_code)
@@ -143,7 +154,9 @@ class RAGClient:
         close_cli = self._external_client is None
 
         try:
-            async with http_cli.stream("POST", endpoint, json=payload, headers=headers, timeout=self.timeout) as resp:
+            async with http_cli.stream(
+                "POST", endpoint, json=payload, headers=headers, timeout=self.timeout
+            ) as resp:
                 if resp.status_code != 200:
                     logger.warning("RAG streaming /answer returned status %d", resp.status_code)
                     yield {"error": f"rag_status_{resp.status_code}"}
@@ -167,4 +180,3 @@ class RAGClient:
         finally:
             if close_cli:
                 await http_cli.aclose()
-

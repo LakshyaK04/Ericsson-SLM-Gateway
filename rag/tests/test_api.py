@@ -1,11 +1,10 @@
 """API route and lifecycle tests for the RAG service."""
 
 from pathlib import Path
-import docx
-from fastapi.testclient import TestClient
+
 import pymupdf
 import pytest
-
+from fastapi.testclient import TestClient
 from rag_service.config import settings
 from rag_service.embeddings import EmbeddingModel
 from rag_service.main import app
@@ -24,8 +23,8 @@ def shared_models(tmp_path_factory):
     retriever = Retriever(test_store, emb_model, reranker, settings)
 
     import rag_service.main as main_mod
-    import rag_service.store as store_mod
     import rag_service.retriever as ret_mod
+    import rag_service.store as store_mod
 
     store_mod._store = test_store
     ret_mod._retriever = retriever
@@ -107,7 +106,6 @@ def test_ready_endpoint(client):
     data = resp.json()
     assert data["status"] == "ready"
     assert data["service"] == "rag-service"
-
 
 
 def test_upload_invalid_extension(client, tmp_path: Path):
@@ -202,6 +200,7 @@ def test_document_ingestion_query_and_deletion_lifecycle(client, sample_pdf: Pat
 def test_rag_api_key_protection_on_documents(client, monkeypatch):
     """When RAG_API_KEY is configured, /documents endpoints require valid Bearer token."""
     from rag_service.config import settings
+
     monkeypatch.setattr(settings, "RAG_API_KEY", "secret-rag-key-123")
 
     # 1. GET /documents without auth -> 401
@@ -228,6 +227,7 @@ def test_rag_api_key_protection_on_documents(client, monkeypatch):
 def test_ingestion_pii_redaction(client, monkeypatch, tmp_path: Path):
     """When PII_REDACTION_ON_INGEST=True, uploaded documents have PII stripped prior to chunking."""
     from rag_service.config import settings
+
     monkeypatch.setattr(settings, "PII_REDACTION_ON_INGEST", True)
 
     pdf_path = tmp_path / "sensitive_memo.pdf"
@@ -251,7 +251,9 @@ def test_ingestion_pii_redaction(client, monkeypatch, tmp_path: Path):
 
     try:
         # Query for the ingested content
-        query_resp = client.post("/query", json={"query": "Who is the lead engineer?", "strategy": "structure"})
+        query_resp = client.post(
+            "/query", json={"query": "Who is the lead engineer?", "strategy": "structure"}
+        )
         assert query_resp.status_code == 200
         results = query_resp.json()["results"]
         assert len(results) > 0
@@ -301,7 +303,9 @@ def test_txt_and_md_ingestion_lifecycle(client, tmp_path: Path):
     """Verify .txt and .md files can be uploaded, indexed, and retrieved."""
     # 1. Upload .txt file
     txt_path = tmp_path / "cloud_native.txt"
-    txt_path.write_text("Cloud Native Infrastructure: Kubernetes coordinates container deployment across edge nodes.")
+    txt_path.write_text(
+        "Cloud Native Infrastructure: Kubernetes coordinates container deployment across edge nodes."
+    )
     with open(txt_path, "rb") as f:
         resp_txt = client.post(
             "/documents",
@@ -313,7 +317,9 @@ def test_txt_and_md_ingestion_lifecycle(client, tmp_path: Path):
 
     # 2. Upload .md file
     md_path = tmp_path / "observability.md"
-    md_path.write_text("# Observability Guide\nPrometheus scrapes OpenTelemetry metrics every 15 seconds.")
+    md_path.write_text(
+        "# Observability Guide\nPrometheus scrapes OpenTelemetry metrics every 15 seconds."
+    )
     with open(md_path, "rb") as f:
         resp_md = client.post(
             "/documents",
@@ -325,16 +331,18 @@ def test_txt_and_md_ingestion_lifecycle(client, tmp_path: Path):
 
     try:
         # Query for txt content
-        q1 = client.post("/query", json={"query": "Kubernetes container deployment", "strategy": "structure"})
+        q1 = client.post(
+            "/query", json={"query": "Kubernetes container deployment", "strategy": "structure"}
+        )
         assert q1.status_code == 200
         assert any("Kubernetes" in r["text"] for r in q1.json()["results"])
 
         # Query for md content
-        q2 = client.post("/query", json={"query": "Prometheus metric scraping interval", "strategy": "structure"})
+        q2 = client.post(
+            "/query", json={"query": "Prometheus metric scraping interval", "strategy": "structure"}
+        )
         assert q2.status_code == 200
         assert any("Prometheus" in r["text"] for r in q2.json()["results"])
     finally:
         client.delete(f"/documents/{txt_doc_id}")
         client.delete(f"/documents/{md_doc_id}")
-
-

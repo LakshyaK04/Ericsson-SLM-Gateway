@@ -1,12 +1,12 @@
 """SLM Gateway — OpenAI-compatible FastAPI application."""
 
-from contextlib import asynccontextmanager
 import json
 import logging
-from pathlib import Path
 import time
-from typing import Optional
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -15,14 +15,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from .backends import (
     InferenceQueueFullError,
     InferenceTimeoutError,
-    LLMBackend,
     get_backend,
 )
 from .config import settings
-from .pii import PIIRedactionError, PIIRedactor, get_redactor
+from .pii import PIIRedactionError, get_redactor
 from .rag_client import RAGClient
 from .rate_limiter import InMemoryRateLimiter
-from .router import IntentRouter, RoutingResult, get_router
+from .router import get_router
 from .schemas import (
     ChatCompletionChunk,
     ChatCompletionChunkChoice,
@@ -33,7 +32,6 @@ from .schemas import (
     ChoiceMessage,
     ModelCard,
     ModelListResponse,
-    OpenAIErrorResponse,
     Usage,
 )
 from .telemetry import telemetry
@@ -44,6 +42,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
 
 # Lifespan context manager: loads dependencies into app.state
 @asynccontextmanager
@@ -59,7 +58,9 @@ async def lifespan(app: FastAPI):
                 raise RuntimeError(
                     f"SLM Gateway startup aborted: Presidio PII redactor failed to initialize with PII_FAIL_MODE=closed: {e}"
                 ) from e
-            logger.warning("Operating in PII fail-open mode; startup continuing without PII redaction.")
+            logger.warning(
+                "Operating in PII fail-open mode; startup continuing without PII redaction."
+            )
             app.state.pii_redactor = None
 
     if getattr(app.state, "router", None) is None:
@@ -145,9 +146,13 @@ async def security_and_tracing_middleware(request: Request, call_next):
     # 3. In-memory IP rate limiting
     if settings.RATE_LIMIT_ENABLED:
         client_ip = (
-            request.headers.get("x-forwarded-for")
-            or (request.client.host if request.client else "unknown")
-        ).split(",")[0].strip()
+            (
+                request.headers.get("x-forwarded-for")
+                or (request.client.host if request.client else "unknown")
+            )
+            .split(",")[0]
+            .strip()
+        )
         allowed, retry_after = rate_limiter.check(client_ip)
         if not allowed:
             return JSONResponse(
@@ -174,6 +179,7 @@ async def security_and_tracing_middleware(request: Request, call_next):
 # ============================================================
 # OpenAI-style Error Handlers
 # ============================================================
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -242,6 +248,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 # ============================================================
 # Playground UI & Health Routes
 # ============================================================
+
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/playground", response_class=HTMLResponse)
@@ -314,6 +321,7 @@ async def metrics():
 # ============================================================
 # OpenAI-Compatible API Routes
 # ============================================================
+
 
 def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
     """Validate Bearer token if GATEWAY_API_KEY is configured per section 4."""
@@ -478,9 +486,7 @@ async def chat_completions(
         }
     else:
         # Extract latest user message for classification
-        user_queries = [
-            m.get("content", "") for m in sanitized_messages if m.get("role") == "user"
-        ]
+        user_queries = [m.get("content", "") for m in sanitized_messages if m.get("role") == "user"]
         query_to_route = user_queries[-1] if user_queries else ""
 
         router = getattr(raw_request.app.state, "router", None) or get_router(settings)
@@ -493,15 +499,23 @@ async def chat_completions(
             has_docs, check_err = await rag_cli.has_indexed_documents(request_id=req_id)
             if not has_docs:
                 if check_err == "no_documents_indexed":
-                    x_routing["warning"] = "No documents indexed in RAG service; fell back to local model."
+                    x_routing["warning"] = (
+                        "No documents indexed in RAG service; fell back to local model."
+                    )
                 else:
-                    x_routing["warning"] = f"RAG service unavailable ({check_err}); fell back to local model."
+                    x_routing["warning"] = (
+                        f"RAG service unavailable ({check_err}); fell back to local model."
+                    )
                 x_routing["route"] = "hf_local"
             else:
                 model_name = request.model or "rag-pipeline"
 
                 # True token streaming when requested and enabled
-                if request.stream and getattr(settings, "RAG_STREAMING_ENABLED", True) and hasattr(rag_cli, "stream_answer"):
+                if (
+                    request.stream
+                    and getattr(settings, "RAG_STREAMING_ENABLED", True)
+                    and hasattr(rag_cli, "stream_answer")
+                ):
                     x_routing["route"] = "rag_service"
 
                     async def stream_rag_live_tokens():
@@ -528,7 +542,9 @@ async def chat_completions(
                                         choices=[
                                             ChatCompletionChunkChoice(
                                                 index=0,
-                                                delta=ChatCompletionChunkDelta(role="assistant", content=""),
+                                                delta=ChatCompletionChunkDelta(
+                                                    role="assistant", content=""
+                                                ),
                                                 finish_reason=None,
                                             )
                                         ],
@@ -552,7 +568,9 @@ async def chat_completions(
                                             choices=[
                                                 ChatCompletionChunkChoice(
                                                     index=0,
-                                                    delta=ChatCompletionChunkDelta(content=content_tok if content_tok else None),
+                                                    delta=ChatCompletionChunkDelta(
+                                                        content=content_tok if content_tok else None
+                                                    ),
                                                     finish_reason=finish,
                                                 )
                                             ],
@@ -578,7 +596,9 @@ async def chat_completions(
                             telemetry.record_pii_redactions(total_redactions)
                             telemetry.record_request("rag", 200, time.perf_counter() - t0)
 
-                    return StreamingResponse(stream_rag_live_tokens(), media_type="text/event-stream")
+                    return StreamingResponse(
+                        stream_rag_live_tokens(), media_type="text/event-stream"
+                    )
 
                 # Non-streaming or fallback generate-then-replay
                 rag_resp, rag_err = await rag_cli.get_answer(
@@ -587,7 +607,9 @@ async def chat_completions(
                     request_id=req_id,
                 )
                 if rag_err or not rag_resp:
-                    x_routing["warning"] = f"RAG answer generation failed ({rag_err}); fell back to local model."
+                    x_routing["warning"] = (
+                        f"RAG answer generation failed ({rag_err}); fell back to local model."
+                    )
                     x_routing["route"] = "hf_local"
                 else:
                     x_routing["route"] = "rag_service"
@@ -596,6 +618,7 @@ async def chat_completions(
                     raw_usage = rag_resp.get("usage", {})
 
                     if request.stream:
+
                         async def stream_rag_chunks():
                             chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
                             created = int(time.time())
@@ -608,7 +631,9 @@ async def chat_completions(
                                     choices=[
                                         ChatCompletionChunkChoice(
                                             index=0,
-                                            delta=ChatCompletionChunkDelta(role="assistant", content=""),
+                                            delta=ChatCompletionChunkDelta(
+                                                role="assistant", content=""
+                                            ),
                                             finish_reason=None,
                                         )
                                     ],
@@ -619,6 +644,7 @@ async def chat_completions(
                                 yield f"data: {meta_chunk.model_dump_json()}\n\n"
 
                                 import re
+
                                 tokens = re.findall(r"\S+|\s+", rag_content)
                                 for t in tokens:
                                     chunk = ChatCompletionChunk(
@@ -654,7 +680,9 @@ async def chat_completions(
                                 telemetry.record_pii_redactions(total_redactions)
                                 telemetry.record_request("rag", 200, time.perf_counter() - t0)
 
-                        return StreamingResponse(stream_rag_chunks(), media_type="text/event-stream")
+                        return StreamingResponse(
+                            stream_rag_chunks(), media_type="text/event-stream"
+                        )
 
                     telemetry.dec_active_requests()
                     telemetry.record_pii_redactions(total_redactions)
@@ -686,6 +714,7 @@ async def chat_completions(
     model_name = request.model or backend.get_model_name()
 
     if request.stream:
+
         async def stream_local_chunks():
             chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
             created = int(time.time())
@@ -705,7 +734,9 @@ async def chat_completions(
                             choices=[
                                 ChatCompletionChunkChoice(
                                     index=0,
-                                    delta=ChatCompletionChunkDelta(role="assistant", content=token_text),
+                                    delta=ChatCompletionChunkDelta(
+                                        role="assistant", content=token_text
+                                    ),
                                     finish_reason=None,
                                 )
                             ],
@@ -744,38 +775,44 @@ async def chat_completions(
                 yield "data: [DONE]\n\n"
             except InferenceQueueFullError as e:
                 logger.warning("Streaming inference queue capacity exceeded: %s", str(e))
-                err_payload = json.dumps({
-                    "error": {
-                        "message": str(e),
-                        "type": "server_overloaded",
-                        "code": 503,
-                        "request_id": req_id,
+                err_payload = json.dumps(
+                    {
+                        "error": {
+                            "message": str(e),
+                            "type": "server_overloaded",
+                            "code": 503,
+                            "request_id": req_id,
+                        }
                     }
-                })
+                )
                 yield f"data: {err_payload}\n\n"
                 yield "data: [DONE]\n\n"
             except InferenceTimeoutError as e:
                 logger.warning("Streaming inference queue timeout: %s", str(e))
-                err_payload = json.dumps({
-                    "error": {
-                        "message": str(e),
-                        "type": "timeout",
-                        "code": 503,
-                        "request_id": req_id,
+                err_payload = json.dumps(
+                    {
+                        "error": {
+                            "message": str(e),
+                            "type": "timeout",
+                            "code": 503,
+                            "request_id": req_id,
+                        }
                     }
-                })
+                )
                 yield f"data: {err_payload}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 logger.error("Streaming generation failed: %s", str(e), exc_info=True)
-                err_payload = json.dumps({
-                    "error": {
-                        "message": str(e),
-                        "type": "generation_error",
-                        "code": 500,
-                        "request_id": req_id,
+                err_payload = json.dumps(
+                    {
+                        "error": {
+                            "message": str(e),
+                            "type": "generation_error",
+                            "code": 500,
+                            "request_id": req_id,
+                        }
                     }
-                })
+                )
                 yield f"data: {err_payload}\n\n"
                 yield "data: [DONE]\n\n"
             finally:
@@ -879,6 +916,7 @@ async def chat_completions(
 # ============================================================
 import sys
 
+
 class _GatewayModule(sys.modules[__name__].__class__):
     @property
     def backend(self):
@@ -912,4 +950,5 @@ class _GatewayModule(sys.modules[__name__].__class__):
     def rag_client_instance(self, value):
         app.state.rag_client = value
 
-sys.modules[__name__].__class__ = _GatewayModule
+
+sys.modules[__name__].__class__ = _GatewayModule

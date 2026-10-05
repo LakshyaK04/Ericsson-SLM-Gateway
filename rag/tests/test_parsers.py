@@ -2,11 +2,11 @@
 
 import io
 from pathlib import Path
+
 import docx
-from PIL import Image
 import pymupdf
 import pytest
-
+from PIL import Image
 from rag_service.parsers import parse_document
 from rag_service.parsers.docx import extract_pages_from_docx
 from rag_service.parsers.pdf import extract_pages_from_pdf
@@ -18,9 +18,15 @@ def tiny_pdf_file(tmp_path: Path) -> Path:
     pdf_path = tmp_path / "sample.pdf"
     doc = pymupdf.open()
     p1 = doc.new_page()
-    p1.insert_text((50, 50), "First page: 5G RAN deployment specifications, massive MIMO beamforming configuration and cell capacity.")
+    p1.insert_text(
+        (50, 50),
+        "First page: 5G RAN deployment specifications, massive MIMO beamforming configuration and cell capacity.",
+    )
     p2 = doc.new_page()
-    p2.insert_text((50, 50), "Second page: Cloud core UPF network throughput benchmarks and user plane latency measurements.")
+    p2.insert_text(
+        (50, 50),
+        "Second page: Cloud core UPF network throughput benchmarks and user plane latency measurements.",
+    )
     doc.save(str(pdf_path))
     doc.close()
     return pdf_path
@@ -87,7 +93,9 @@ def test_pdf_parser_rejects_empty_or_scanned_pdf(empty_pdf_file: Path, monkeypat
     assert "OCR is unavailable or found no text" in str(excinfo.value)
 
 
-def test_pdf_parser_ocr_fallback_yields_text_when_available(scanned_image_pdf_file: Path, monkeypatch):
+def test_pdf_parser_ocr_fallback_yields_text_when_available(
+    scanned_image_pdf_file: Path, monkeypatch
+):
     """When OCR is available and page has no text layer, OCR extracts the page text."""
     monkeypatch.setattr("rag_service.parsers.pdf._TESSERACT_AVAILABLE", True)
 
@@ -105,7 +113,9 @@ def test_pdf_parser_ocr_fallback_yields_text_when_available(scanned_image_pdf_fi
     assert "Beamforming parameters for carrier aggregation" in pages[0][1]
 
 
-def test_pdf_parser_image_only_raises_error_when_ocr_unavailable(scanned_image_pdf_file: Path, monkeypatch):
+def test_pdf_parser_image_only_raises_error_when_ocr_unavailable(
+    scanned_image_pdf_file: Path, monkeypatch
+):
     """When OCR is unavailable, an image-only PDF raises ValueError with the exact error message."""
     monkeypatch.setattr("rag_service.parsers.pdf._TESSERACT_AVAILABLE", False)
     with pytest.raises(ValueError) as excinfo:
@@ -169,7 +179,9 @@ def test_parse_document_txt_and_md_formats(tmp_path: Path):
 
     # 2. Markdown file
     md_file = tmp_path / "readme.md"
-    md_file.write_text("# Project Architecture\n\nThe gateway manages Presidio PII and BGE routing.")
+    md_file.write_text(
+        "# Project Architecture\n\nThe gateway manages Presidio PII and BGE routing."
+    )
     pages_md = parse_document(md_file)
     assert len(pages_md) == 1
     assert "Project Architecture" in pages_md[0][1]
@@ -182,7 +194,6 @@ def test_parse_document_txt_and_md_formats(tmp_path: Path):
     assert "No extractable text found" in str(excinfo.value)
 
 
-
 def test_pdf_parser_table_structure_and_chunking(tmp_path: Path):
     """Fast test verifying PDF table extraction serializes rows with headers and chunking keeps rows intact."""
     from rag_service.chunking.character import split_character_text
@@ -191,7 +202,9 @@ def test_pdf_parser_table_structure_and_chunking(tmp_path: Path):
     pdf_path = tmp_path / "table_test.pdf"
     doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_text((50, 40), "Configuration parameters for the alerting service runtime environment.")
+    page.insert_text(
+        (50, 40), "Configuration parameters for the alerting service runtime environment."
+    )
     page.draw_rect(pymupdf.Rect(50, 50, 350, 110), color=(0, 0, 0), width=1)
     page.draw_line(pymupdf.Point(50, 80), pymupdf.Point(350, 80), color=(0, 0, 0), width=1)
     page.draw_line(pymupdf.Point(200, 50), pymupdf.Point(200, 110), color=(0, 0, 0), width=1)
@@ -214,4 +227,3 @@ def test_pdf_parser_table_structure_and_chunking(tmp_path: Path):
     # Verify structure chunking keeps the table row unbroken
     struct_chunks = split_structure_text(page_text, max_chunk_size=1000)
     assert any("Setting: RETENTION_DAYS | Value: 45" in c for c in struct_chunks)
-

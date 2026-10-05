@@ -24,7 +24,9 @@ HEADING_REGEX = re.compile(
 
 def _has_table(s: str) -> bool:
     """Check if text contains serialized table rows."""
-    return any(" | " in line or (line.startswith("|") and line.endswith("|")) for line in s.splitlines())
+    return any(
+        " | " in line or (line.startswith("|") and line.endswith("|")) for line in s.splitlines()
+    )
 
 
 def _starts_with_heading(s: str) -> bool:

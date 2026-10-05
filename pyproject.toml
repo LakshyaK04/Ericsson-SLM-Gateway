@@ -18,6 +18,9 @@ dependencies = []
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
     "openai>=1.0.0",
     "pillow>=12.3.0",
 ]
@@ -42,3 +45,41 @@ testpaths = ["gateway/tests", "rag/tests"]
 markers = [
     "slow: marks tests that load heavy ML models (deselect with '-m \"not slow\"')",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501", "E402"]
+
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false
+warn_redundant_casts = false
+check_untyped_defs = false
+disable_error_code = [
+    "var-annotated",
+    "arg-type",
+    "assignment",
+    "attr-defined",
+    "no-redef",
+    "dict-item",
+    "index",
+    "union-attr",
+    "misc",
+]
+
+
+[tool.coverage.run]
+source = ["gateway/src", "rag/src"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+

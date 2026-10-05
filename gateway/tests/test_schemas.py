@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-
 from slm_gateway.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -17,9 +16,7 @@ from slm_gateway.schemas import (
 
 def test_valid_chat_completion_request():
     """Verify standard valid request succeeds with defaults."""
-    req = ChatCompletionRequest(
-        messages=[ChatMessage(role="user", content="Hello")]
-    )
+    req = ChatCompletionRequest(messages=[ChatMessage(role="user", content="Hello")])
     assert req.temperature == 0.7
     assert req.top_p == 1.0
     assert req.max_tokens == 512
@@ -94,11 +91,7 @@ def test_chat_completion_response_shape():
 
 def test_model_list_response():
     """GET /v1/models response must match OpenAI list structure."""
-    resp = ModelListResponse(
-        data=[
-            ModelCard(id="microsoft/Phi-3-mini-4k-instruct")
-        ]
-    )
+    resp = ModelListResponse(data=[ModelCard(id="microsoft/Phi-3-mini-4k-instruct")])
     assert resp.object == "list"
     assert len(resp.data) == 1
     assert resp.data[0].id == "microsoft/Phi-3-mini-4k-instruct"

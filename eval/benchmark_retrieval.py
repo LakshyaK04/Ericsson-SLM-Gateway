@@ -26,13 +26,13 @@ import csv
 import json
 import logging
 import math
-import os
-from pathlib import Path
 import platform
 import shutil
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Dict, Optional
+
 import numpy as np
 import torch
 
@@ -42,7 +42,6 @@ logger = logging.getLogger("benchmark_retrieval")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 
-from rag_service.bm25 import BM25Index, reciprocal_rank_fusion
 from rag_service.chunking.base import Chunk
 from rag_service.config import Settings
 from rag_service.embeddings import EmbeddingModel
@@ -84,6 +83,7 @@ def run_benchmark():
     if not CORPUS_FILE.exists() or not QUERIES_FILE.exists():
         logger.info("Corpus or queries file missing, running prepare_benchmark.py...")
         from eval.prepare_benchmark import prepare_benchmark
+
         prepare_benchmark(max_passages=500, max_queries=150, seed=42)
 
     # 1. Load data
@@ -95,7 +95,9 @@ def run_benchmark():
 
     hw = get_hardware_info()
     logger.info("Loaded %d corpus passages and %d queries.", len(corpus), len(queries))
-    logger.info("Hardware detected: %s | GPU: %s | Device: %s", hw["cpu"], hw["gpu_name"], hw["device"])
+    logger.info(
+        "Hardware detected: %s | GPU: %s | Device: %s", hw["cpu"], hw["gpu_name"], hw["device"]
+    )
 
     # 2. Setup isolated Chroma directory
     eval_db_dir = REPO_ROOT / "data" / "chroma_squad_benchmark"
@@ -285,23 +287,32 @@ def run_benchmark():
 
         logger.info(
             "[%s] Hit@1: %.2f%% | Hit@3: %.2f%% | Hit@10: %.2f%% | MRR: %.4f | nDCG@10: %.4f | Lat: %.2fms (p95: %.2fms)",
-            conf_name, hit1_pct, hit3_pct, hit10_pct, mrr, ndcg10, mean_lat, p95_lat
+            conf_name,
+            hit1_pct,
+            hit3_pct,
+            hit10_pct,
+            mrr,
+            ndcg10,
+            mean_lat,
+            p95_lat,
         )
 
-        benchmark_rows.append({
-            "Configuration": conf_name,
-            "Mode": mode,
-            "Re-Ranker": "On (bge-reranker-base)" if use_reranker else "Off",
-            "RRF k": rrf_k,
-            "Weights (Dense/Sparse)": f"{dw:.1f} / {sw:.1f}" if mode == "hybrid" else "N/A",
-            "Hit@1 (%)": hit1_pct,
-            "Hit@3 (%)": hit3_pct,
-            "Hit@10 (%)": hit10_pct,
-            "MRR": mrr,
-            "nDCG@10": ndcg10,
-            "Mean Latency (ms)": mean_lat,
-            "P95 Latency (ms)": p95_lat,
-        })
+        benchmark_rows.append(
+            {
+                "Configuration": conf_name,
+                "Mode": mode,
+                "Re-Ranker": "On (bge-reranker-base)" if use_reranker else "Off",
+                "RRF k": rrf_k,
+                "Weights (Dense/Sparse)": f"{dw:.1f} / {sw:.1f}" if mode == "hybrid" else "N/A",
+                "Hit@1 (%)": hit1_pct,
+                "Hit@3 (%)": hit3_pct,
+                "Hit@10 (%)": hit10_pct,
+                "MRR": mrr,
+                "nDCG@10": ndcg10,
+                "Mean Latency (ms)": mean_lat,
+                "P95 Latency (ms)": p95_lat,
+            }
+        )
 
     # Save results
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -318,17 +329,21 @@ def run_benchmark():
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# Empirical Retrieval & Re-Ranking Benchmark Report\n\n")
         f.write(f"- **Benchmark Run Date:** {timestamp}\n")
-        f.write(f"- **Dataset:** SQuAD v2.0 Public Slice ({len(corpus)} passages, {n_queries} queries)\n")
-        f.write(f"- **Dense Bi-Encoder:** `BAAI/bge-small-en-v1.5` (384-dim, normalized)\n")
-        f.write(f"- **Sparse Lexical Engine:** Okapi BM25 ($k_1=1.5, b=0.75$)\n")
-        f.write(f"- **Neural Cross-Encoder:** `BAAI/bge-reranker-base`\n")
+        f.write(
+            f"- **Dataset:** SQuAD v2.0 Public Slice ({len(corpus)} passages, {n_queries} queries)\n"
+        )
+        f.write("- **Dense Bi-Encoder:** `BAAI/bge-small-en-v1.5` (384-dim, normalized)\n")
+        f.write("- **Sparse Lexical Engine:** Okapi BM25 ($k_1=1.5, b=0.75$)\n")
+        f.write("- **Neural Cross-Encoder:** `BAAI/bge-reranker-base`\n")
         f.write(f"- **Hardware Platform:** {hw['platform']}\n")
         f.write(f"- **CPU:** {hw['cpu']}\n")
         f.write(f"- **GPU / Device:** {hw['gpu_name']} (`{hw['device']}`)\n")
         f.write(f"- **PyTorch Version:** {hw['torch_version']}\n\n")
 
         f.write("---\n\n## 1. Retrieval Performance Matrix\n\n")
-        f.write("| Configuration | Re-Ranker | RRF $k$ | Dense / Sparse Weights | Hit@1 (%) | Hit@3 (%) | Hit@10 (%) | MRR | nDCG@10 | Mean Latency (ms) | P95 Latency (ms) |\n")
+        f.write(
+            "| Configuration | Re-Ranker | RRF $k$ | Dense / Sparse Weights | Hit@1 (%) | Hit@3 (%) | Hit@10 (%) | MRR | nDCG@10 | Mean Latency (ms) | P95 Latency (ms) |\n"
+        )
         f.write("|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
         for r in benchmark_rows:
             f.write(
@@ -339,9 +354,12 @@ def run_benchmark():
 
         f.write("\n---\n\n## 2. In-Depth Empirical Analysis & Honest Insights\n\n")
 
-        best_hit1 = max(benchmark_rows, key=lambda x: x["Hit@1 (%)"])
         bm25_row = next(r for r in benchmark_rows if "BM25" in r["Configuration"])
-        dense_row = next(r for r in benchmark_rows if "Dense" in r["Configuration"] and "Hybrid" not in r["Configuration"])
+        dense_row = next(
+            r
+            for r in benchmark_rows
+            if "Dense" in r["Configuration"] and "Hybrid" not in r["Configuration"]
+        )
         hybrid_row = next(r for r in benchmark_rows if r["Configuration"] == "Hybrid RRF (k=60)")
         rerank_row = next(r for r in benchmark_rows if "Cross-Encoder" in r["Configuration"])
 

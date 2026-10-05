@@ -7,7 +7,7 @@ and provides configurable fail-closed / fail-open behavior.
 
 import logging
 import re
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 from presidio_analyzer.nlp_engine import NlpEngineProvider
@@ -36,6 +36,7 @@ DEFAULT_ENTITIES = [
 
 class PIIRedactionError(Exception):
     """Raised when PII redaction fails in fail-closed mode."""
+
     pass
 
 
@@ -115,13 +116,21 @@ class PIIRedactor:
                     context=["project", "codename", "program", "initiative", "operation"],
                 )
                 self.analyzer.registry.add_recognizer(codename_recognizer)
-                logger.info("Registered PROJECT_CODENAME deny-list recognizer with %d codenames.", len(codename_list))
+                logger.info(
+                    "Registered PROJECT_CODENAME deny-list recognizer with %d codenames.",
+                    len(codename_list),
+                )
 
-            logger.info("PIIRedactor initialized successfully with %d entities.", len(self.supported_entities))
+            logger.info(
+                "PIIRedactor initialized successfully with %d entities.",
+                len(self.supported_entities),
+            )
         except Exception as e:
             logger.error("Failed to initialize Presidio PII engine: %s", str(e), exc_info=True)
             if self.fail_mode == "closed":
-                raise RuntimeError(f"Presidio PII analyzer failed to initialize (fail-mode: closed): {e}") from e
+                raise RuntimeError(
+                    f"Presidio PII analyzer failed to initialize (fail-mode: closed): {e}"
+                ) from e
             else:
                 logger.warning("Operating in fail-open mode; PII redaction is disabled.")
 

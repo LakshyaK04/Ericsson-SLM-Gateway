@@ -8,11 +8,12 @@ it automatically falls back to Tesseract OCR when available.
 import io
 import logging
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
-from PIL import Image
+
 import pymupdf
+from PIL import Image
 
 from rag_service.config import settings
 
@@ -87,7 +88,9 @@ def _serialize_table(tab: Any) -> List[str]:
     """Serialize a PyMuPDF Table object into lines formatted as:
     Header1: val1 | Header2: val2 | ...
     """
-    headers = [h.strip() if h and h.strip() else f"Col{i+1}" for i, h in enumerate(tab.header.names)]
+    headers = [
+        h.strip() if h and h.strip() else f"Col{i + 1}" for i, h in enumerate(tab.header.names)
+    ]
     rows_text: List[str] = []
 
     try:
@@ -99,7 +102,7 @@ def _serialize_table(tab: Any) -> List[str]:
             row = cell_boxes[r_idx]
             row_parts = []
             for c_idx, cell in enumerate(row):
-                h = headers[c_idx] if c_idx < len(headers) else f"Col{c_idx+1}"
+                h = headers[c_idx] if c_idx < len(headers) else f"Col{c_idx + 1}"
                 val = ""
                 if cell is not None:
                     txt = extract_cells(tab.textpage, cell, markdown=False)
@@ -116,7 +119,7 @@ def _serialize_table(tab: Any) -> List[str]:
             for row in raw_rows[j_start:]:
                 row_parts = []
                 for c_idx, cell in enumerate(row):
-                    h = headers[c_idx] if c_idx < len(headers) else f"Col{c_idx+1}"
+                    h = headers[c_idx] if c_idx < len(headers) else f"Col{c_idx + 1}"
                     val = " ".join(str(cell).split()).strip() if cell else ""
                     if val:
                         row_parts.append(f"{h}: {val}")

@@ -3,6 +3,7 @@
 import time
 import uuid
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -13,8 +14,12 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     model: Optional[str] = Field(default=None, description="ID of the model to use")
-    messages: List[ChatMessage] = Field(..., description="List of messages comprising the conversation so far")
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature between 0 and 2")
+    messages: List[ChatMessage] = Field(
+        ..., description="List of messages comprising the conversation so far"
+    )
+    temperature: float = Field(
+        default=0.7, ge=0.0, le=2.0, description="Sampling temperature between 0 and 2"
+    )
     top_p: float = Field(default=1.0, ge=0.0, le=1.0, description="Nucleus sampling probability")
     max_tokens: int = Field(default=512, ge=1, description="Maximum number of tokens to generate")
     stream: bool = Field(default=False, description="Whether to stream back partial progress")

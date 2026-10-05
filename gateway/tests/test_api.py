@@ -2,10 +2,9 @@
 
 import pytest
 from fastapi.testclient import TestClient
-
+from slm_gateway.backends.base import LLMBackend
 from slm_gateway.config import settings
 from slm_gateway.main import app
-from slm_gateway.backends.base import LLMBackend
 
 
 class MockBackend(LLMBackend):
@@ -51,6 +50,7 @@ class MockRouter:
 
     def classify(self, query: str):
         from slm_gateway.router import RoutingResult
+
         return RoutingResult(
             intent="general",
             confidence=0.95,
@@ -67,6 +67,7 @@ def setup_mock_backend(monkeypatch):
     mock_b = MockBackend(ready=True)
     mock_r = MockRouter(ready=True)
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "backend", mock_b)
     monkeypatch.setattr(main_mod, "router_instance", mock_r)
     app.state.backend = mock_b
@@ -102,6 +103,7 @@ def test_ready_endpoint_when_not_ready(client, monkeypatch):
     """GET /ready returns 503 when backend is not ready."""
     mock = MockBackend(ready=False)
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod, "backend", mock)
     app.state.backend = mock
 
@@ -125,9 +127,7 @@ def test_chat_completions_success(client):
     """POST /v1/chat/completions returns expected OpenAI-compatible JSON."""
     payload = {
         "model": "mock-phi3-mini",
-        "messages": [
-            {"role": "user", "content": "Explain telemetry"}
-        ],
+        "messages": [{"role": "user", "content": "Explain telemetry"}],
         "temperature": 0.5,
         "max_tokens": 100,
     }
@@ -183,6 +183,7 @@ def test_chat_completions_streaming_success(client):
 
     # Parse and validate chunks
     import json
+
     chunks = []
     for line in lines[:-1]:
         assert line.startswith("data: ")
@@ -304,7 +305,6 @@ def test_playground_endpoint(client):
     assert "warmup-banner" in resp2.text
 
 
-
 def test_chat_completions_x_rag_strategy_invalid(client):
     """POST /v1/chat/completions with invalid X-RAG-Strategy returns 422."""
     payload = {"messages": [{"role": "user", "content": "Hello"}]}
@@ -319,9 +319,10 @@ def test_chat_completions_x_rag_strategy_invalid(client):
 
 def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
     """POST /v1/chat/completions forwards valid X-RAG-Strategy to RAG client."""
-    from unittest.mock import AsyncMock, ANY
-    from slm_gateway.router import RoutingResult
+    from unittest.mock import ANY, AsyncMock
+
     import slm_gateway.main as main_mod
+    from slm_gateway.router import RoutingResult
 
     class RagMockRouter:
         def is_ready(self):
@@ -386,10 +387,13 @@ def test_chat_completions_x_rag_strategy_forwarded(client, monkeypatch):
 def test_request_body_size_limit(client, monkeypatch):
     """Requests exceeding MAX_REQUEST_BODY_BYTES return 413 with OpenAI error."""
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod.settings, "MAX_REQUEST_BODY_BYTES", 50)
 
     # Payload larger than 50 bytes
-    payload = {"messages": [{"role": "user", "content": "This payload is definitely longer than 50 bytes"}]}
+    payload = {
+        "messages": [{"role": "user", "content": "This payload is definitely longer than 50 bytes"}]
+    }
     resp = client.post("/v1/chat/completions", json=payload)
     assert resp.status_code == 413
     data = resp.json()
@@ -400,6 +404,7 @@ def test_request_body_size_limit(client, monkeypatch):
 def test_request_message_count_and_char_limits(client, monkeypatch):
     """Requests exceeding MAX_REQUEST_MESSAGES or MAX_MESSAGE_CHARS return 400."""
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod.settings, "MAX_REQUEST_MESSAGES", 2)
     monkeypatch.setattr(main_mod.settings, "MAX_MESSAGE_CHARS", 20)
 
@@ -429,6 +434,7 @@ def test_request_message_count_and_char_limits(client, monkeypatch):
 def test_rate_limiting_returns_429(client, monkeypatch):
     """When rate limit is exceeded, gateway returns 429 with Retry-After header."""
     import slm_gateway.main as main_mod
+
     monkeypatch.setattr(main_mod.settings, "RATE_LIMIT_ENABLED", True)
     limiter = main_mod.rate_limiter
     original_enabled = limiter.enabled
@@ -458,9 +464,10 @@ def test_rate_limiting_returns_429(client, monkeypatch):
 
 def test_bounded_queue_rejection_returns_503(client, monkeypatch):
     """Inference queue overflow or timeout returns 503 Service Unavailable."""
+    from unittest.mock import AsyncMock
+
     import slm_gateway.main as main_mod
     from slm_gateway.backends import InferenceQueueFullError, InferenceTimeoutError
-    from unittest.mock import AsyncMock
 
     mock_backend = AsyncMock()
     mock_backend.is_ready = lambda: True
@@ -498,7 +505,9 @@ def test_x_request_id_propagation_and_error_inclusion(client):
     assert resp_no_header.headers["X-Request-ID"].startswith("req-")
 
     # 3. Request-id included in error response payload (schema validation error -> 422)
-    err_resp = client.post("/v1/chat/completions", json={}, headers={"X-Request-ID": "err-trace-9999"})
+    err_resp = client.post(
+        "/v1/chat/completions", json={}, headers={"X-Request-ID": "err-trace-9999"}
+    )
     assert err_resp.status_code == 422
     assert err_resp.headers.get("X-Request-ID") == "err-trace-9999"
     assert err_resp.json()["error"]["request_id"] == "err-trace-9999"
@@ -507,8 +516,9 @@ def test_x_request_id_propagation_and_error_inclusion(client):
 def test_chat_completions_rag_live_token_streaming(client, monkeypatch):
     """When stream=True and RAG_STREAMING_ENABLED=True, gateway proxies live tokens from RAGClient."""
     from unittest.mock import AsyncMock
-    from slm_gateway.router import RoutingResult
+
     import slm_gateway.main as main_mod
+    from slm_gateway.router import RoutingResult
 
     class RagMockRouter:
         def is_ready(self):
@@ -552,11 +562,3 @@ def test_chat_completions_rag_live_token_streaming(client, monkeypatch):
     assert "Live " in resp.text
     assert "RAG token streaming." in resp.text
     assert "[DONE]" in resp.text
-
-
-
-
-
-
-
-

@@ -2,14 +2,16 @@
 Generate an animated GIF showing Local GenAI Stack workflow:
 PII Redaction -> Semantic Router -> Hybrid Retrieval -> Token Streaming.
 """
-from PIL import Image, ImageDraw, ImageFont
+
 import os
+
+from PIL import Image, ImageDraw
 
 os.makedirs("assets", exist_ok=True)
 
 width, height = 800, 480
 bg_color = (15, 23, 42)  # Slate 900
-card_bg = (30, 41, 59)   # Slate 800
+card_bg = (30, 41, 59)  # Slate 800
 text_main = (248, 250, 252)
 text_muted = (148, 163, 184)
 accent_cyan = (56, 189, 248)
@@ -30,7 +32,7 @@ frames_data = [
             (' regarding confidential Project Phoenix 5G architecture."', accent_amber),
             ("", text_main),
             ("Status: Intercepted by Privacy Engine (Fail-Closed Mode Active)", text_muted),
-        ]
+        ],
     },
     {
         "title": "Step 2: Real-time PII & Codename Sanitization",
@@ -45,7 +47,7 @@ frames_data = [
             ("", text_main),
             ('Sanitized Prompt: "Audit report for <EMPLOYEE_ID> (<EMAIL_ADDRESS>)', text_main),
             (' regarding confidential <PROJECT_CODENAME> 5G architecture."', text_main),
-        ]
+        ],
     },
     {
         "title": "Step 3: Lightweight Semantic Complexity Routing",
@@ -59,7 +61,7 @@ frames_data = [
             ("Routing Decision: [slm-local] (Phi-3 Mini 4K Instruct)", accent_green),
             ("", text_main),
             ("Cloud fallback bypassed -> On-device execution maintained", accent_green),
-        ]
+        ],
     },
     {
         "title": "Step 4: Hybrid Retrieval with Reciprocal Rank Fusion",
@@ -68,12 +70,18 @@ frames_data = [
         "lines": [
             ("Query: 5G Core architecture network slicing", accent_amber),
             ("", text_main),
-            ("1. BM25 Lexical Search  : 5 keyword chunks retrieved (Rank 1: chunk_402)", text_muted),
-            ("2. BGE Dense Vectors    : 5 semantic chunks retrieved (Rank 1: chunk_402)", text_muted),
+            (
+                "1. BM25 Lexical Search  : 5 keyword chunks retrieved (Rank 1: chunk_402)",
+                text_muted,
+            ),
+            (
+                "2. BGE Dense Vectors    : 5 semantic chunks retrieved (Rank 1: chunk_402)",
+                text_muted,
+            ),
             ("3. RRF Fusion (k=60)    : Composite RRF Score = 0.0328", accent_cyan),
             ("", text_main),
             ("Context Grounding: 3 verified chunks injected into prompt", accent_green),
-        ]
+        ],
     },
     {
         "title": "Step 5: SSE Token Streaming & Telemetry",
@@ -87,8 +95,8 @@ frames_data = [
             ("", text_main),
             ("Prometheus /metrics updated: requests_total +1, pii_entities_total +3", accent_cyan),
             ("Total end-to-end latency: 412ms | Memory footprint: 4.8 GB VRAM", accent_green),
-        ]
-    }
+        ],
+    },
 ]
 
 images = []
@@ -116,11 +124,5 @@ for data in frames_data:
     for _ in range(4):
         images.append(im)
 
-images[0].save(
-    "assets/demo.gif",
-    save_all=True,
-    append_images=images[1:],
-    duration=500,
-    loop=0
-)
+images[0].save("assets/demo.gif", save_all=True, append_images=images[1:], duration=500, loop=0)
 print("Demo GIF successfully saved to assets/demo.gif")

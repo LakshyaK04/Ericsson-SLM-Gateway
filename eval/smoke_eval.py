@@ -15,13 +15,12 @@ Outputs:
 
 import json
 import logging
-from pathlib import Path
 import re
 import shutil
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
@@ -146,13 +145,15 @@ def run_smoke_evaluation():
                             rr_sum += 0.5
                         elif match_rank == 3:
                             hit_3_count += 1
-                            rr_sum += (1.0 / 3.0)
+                            rr_sum += 1.0 / 3.0
                         else:
-                            failed_questions.append({
-                                "question": q,
-                                "expected": qa["expected_substring"],
-                                "top_chunks": [r.text[:80].replace("\n", " ") for r in results],
-                            })
+                            failed_questions.append(
+                                {
+                                    "question": q,
+                                    "expected": qa["expected_substring"],
+                                    "top_chunks": [r.text[:80].replace("\n", " ") for r in results],
+                                }
+                            )
 
                     n_q = len(qa_pairs)
                     hit_1 = (hit_1_count / n_q) * 100.0
@@ -160,28 +161,36 @@ def run_smoke_evaluation():
                     mrr = rr_sum / n_q
                     avg_latency = sum(latencies) / len(latencies)
 
-                    report_rows.append({
-                        "strategy": strat,
-                        "mode": mode,
-                        "reranker": rerank_label,
-                        "hit_3": round(hit_3, 2),
-                        "hit_1": round(hit_1, 2),
-                        "mrr": round(mrr, 4),
-                        "avg_latency_ms": round(avg_latency, 2),
-                        "failed_count": len(failed_questions),
-                    })
+                    report_rows.append(
+                        {
+                            "strategy": strat,
+                            "mode": mode,
+                            "reranker": rerank_label,
+                            "hit_3": round(hit_3, 2),
+                            "hit_1": round(hit_1, 2),
+                            "mrr": round(mrr, 4),
+                            "avg_latency_ms": round(avg_latency, 2),
+                            "failed_count": len(failed_questions),
+                        }
+                    )
 
                     failures_by_config[config_key] = failed_questions
 
                     logger.info(
                         "Config [%s]: Hit@3=%.1f%%, Hit@1=%.1f%%, MRR=%.4f (Failed: %d)",
-                        config_key, hit_3, hit_1, mrr, len(failed_questions),
+                        config_key,
+                        hit_3,
+                        hit_1,
+                        mrr,
+                        len(failed_questions),
                     )
 
         # Write CSV report
         csv_path = results_dir / "nimbus_smoke_report.csv"
         with open(csv_path, "w", encoding="utf-8") as f:
-            f.write("Strategy,Mode,Reranker,Hit@3 (%),Hit@1 (%),MRR,Avg Latency (ms),Failed Questions\n")
+            f.write(
+                "Strategy,Mode,Reranker,Hit@3 (%),Hit@1 (%),MRR,Avg Latency (ms),Failed Questions\n"
+            )
             for r in report_rows:
                 f.write(
                     f"{r['strategy']},{r['mode']},{r['reranker']},"
@@ -200,7 +209,9 @@ def run_smoke_evaluation():
             )
 
             f.write("## 1. Summary of Hit@3 Across Strategies and Retrieval Modes\n\n")
-            f.write("| Strategy | Retrieval Mode | Re-ranker | Hit@3 (%) | Hit@1 (%) | MRR | Latency (ms) | Failed |\n")
+            f.write(
+                "| Strategy | Retrieval Mode | Re-ranker | Hit@3 (%) | Hit@1 (%) | MRR | Latency (ms) | Failed |\n"
+            )
             f.write("|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
             for r in report_rows:
                 f.write(
@@ -218,9 +229,9 @@ def run_smoke_evaluation():
                     if fails:
                         f.write(f"### Configuration: `{cfg_name}` ({len(fails)} failed)\n\n")
                         for item in fails:
-                            f.write(f"- **Question**: \"{item['question']}\"\n")
+                            f.write(f'- **Question**: "{item["question"]}"\n')
                             f.write(f"  - **Expected Substring**: `{item['expected']}`\n")
-                            f.write(f"  - **Retrieved Top Chunks**:\n")
+                            f.write("  - **Retrieved Top Chunks**:\n")
                             for idx, snippet in enumerate(item["top_chunks"], start=1):
                                 f.write(f"    - [{idx}] `{snippet}`\n")
                         f.write("\n")

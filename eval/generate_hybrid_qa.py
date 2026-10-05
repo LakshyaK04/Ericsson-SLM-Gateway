@@ -1,8 +1,8 @@
 """Generate and verify eval/datasets/hybrid_eval.jsonl with exact substring ground truth."""
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
@@ -10,16 +10,26 @@ sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 from rag_service.parsers import extract_pages_from_pdf
 
 docs = {
-    "enterprise_rag_sample.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "enterprise_rag_sample.pdf"),
-    "5g_core_architecture.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "5g_core_architecture.pdf"),
-    "cloud_native_telecom_infrastructure.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "cloud_native_telecom_infrastructure.pdf"),
-    "distributed_consensus_raft_spec.pdf": extract_pages_from_pdf(REPO_ROOT / "eval" / "docs" / "distributed_consensus_raft_spec.pdf"),
+    "enterprise_rag_sample.pdf": extract_pages_from_pdf(
+        REPO_ROOT / "eval" / "docs" / "enterprise_rag_sample.pdf"
+    ),
+    "5g_core_architecture.pdf": extract_pages_from_pdf(
+        REPO_ROOT / "eval" / "docs" / "5g_core_architecture.pdf"
+    ),
+    "cloud_native_telecom_infrastructure.pdf": extract_pages_from_pdf(
+        REPO_ROOT / "eval" / "docs" / "cloud_native_telecom_infrastructure.pdf"
+    ),
+    "distributed_consensus_raft_spec.pdf": extract_pages_from_pdf(
+        REPO_ROOT / "eval" / "docs" / "distributed_consensus_raft_spec.pdf"
+    ),
 }
 
 import re
 
+
 def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
 
 doc_texts = {name: normalize_text(" ".join(t for _, t in pages)) for name, pages in docs.items()}
 
@@ -98,7 +108,6 @@ qa_items = [
         "doc_name": "cloud_native_telecom_infrastructure.pdf",
         "category": "keyword_acronym",
     },
-
     # --- Category B: Conceptual / Paraphrase (Dense's strength) ---
     {
         "query": "How do distributed cluster nodes resolve simultaneous candidacy deadlocks?",

@@ -11,9 +11,9 @@ Source: https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v2.0.json
 
 import json
 import logging
-from pathlib import Path
 import random
 import urllib.request
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("prepare_benchmark")
@@ -29,14 +29,18 @@ SQUAD_URL = "https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v2.0.json"
 def download_squad_raw(target_path: Path) -> None:
     """Download raw SQuAD v2.0 dev dataset if not already present locally."""
     if target_path.exists() and target_path.stat().st_size > 100000:
-        logger.info("Found cached SQuAD raw dataset at %s (%d bytes).", target_path, target_path.stat().st_size)
+        logger.info(
+            "Found cached SQuAD raw dataset at %s (%d bytes).",
+            target_path,
+            target_path.stat().st_size,
+        )
         return
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Downloading SQuAD v2.0 dev dataset from %s...", SQUAD_URL)
     req = urllib.request.Request(
         SQUAD_URL,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp, open(target_path, "wb") as f:
         data = resp.read()
@@ -78,11 +82,13 @@ def prepare_benchmark(
             doc_id = f"squad_doc_{doc_id_counter:04d}"
             doc_id_counter += 1
 
-            corpus_entries.append({
-                "doc_id": doc_id,
-                "title": title,
-                "text": context,
-            })
+            corpus_entries.append(
+                {
+                    "doc_id": doc_id,
+                    "title": title,
+                    "text": context,
+                }
+            )
 
             # Check for answerable questions in this passage
             qas = para.get("qas", [])
@@ -96,20 +102,26 @@ def prepare_benchmark(
                 if not q_text or not answers:
                     continue
 
-                query_entries.append({
-                    "query_id": f"squad_q_{len(query_entries):04d}",
-                    "query": q_text,
-                    "gold_doc_id": doc_id,
-                    "title": title,
-                    "answers": answers,
-                })
+                query_entries.append(
+                    {
+                        "query_id": f"squad_q_{len(query_entries):04d}",
+                        "query": q_text,
+                        "gold_doc_id": doc_id,
+                        "title": title,
+                        "answers": answers,
+                    }
+                )
 
             if len(corpus_entries) >= max_passages * 2 and len(query_entries) >= max_queries * 3:
                 break
         if len(corpus_entries) >= max_passages * 2:
             break
 
-    logger.info("Collected %d candidate passages and %d candidate queries.", len(corpus_entries), len(query_entries))
+    logger.info(
+        "Collected %d candidate passages and %d candidate queries.",
+        len(corpus_entries),
+        len(query_entries),
+    )
 
     # Downsample deterministically to target sizes
     rng.shuffle(query_entries)
@@ -144,7 +156,10 @@ def prepare_benchmark(
 
     logger.info(
         "Successfully prepared benchmark: %d corpus passages written to %s, %d queries written to %s.",
-        len(final_corpus), CORPUS_OUTPUT, len(selected_queries), QUERIES_OUTPUT
+        len(final_corpus),
+        CORPUS_OUTPUT,
+        len(selected_queries),
+        QUERIES_OUTPUT,
     )
 
 

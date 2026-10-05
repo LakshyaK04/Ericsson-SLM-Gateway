@@ -1,13 +1,13 @@
 """RAG Service — Document Ingestion, Chunking, Retrieval, and Re-ranking API."""
 
-from contextlib import asynccontextmanager
 import hashlib
 import logging
 import os
-from pathlib import Path
 import tempfile
-from typing import Optional
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -15,12 +15,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from .chunking import chunk_document
 from .config import settings
 from .embeddings import EmbeddingModel, get_embedding_model
+from .generation import generate_grounded_answer, stream_grounded_answer
 from .parsers import parse_document
 from .pii import redact_ingest_text
 from .rate_limiter import InMemoryRateLimiter
 from .reranker import Reranker, get_reranker
 from .retriever import Retriever, get_retriever
-from .generation import generate_grounded_answer, stream_grounded_answer
 from .schemas import (
     AnswerResponse,
     DeleteDocumentResponse,
@@ -29,7 +29,6 @@ from .schemas import (
     DocumentUploadResponse,
     QueryRequest,
     QueryResponse,
-    QueryResultItem,
 )
 from .store import ChromaStore, get_chroma_store
 
@@ -122,9 +121,13 @@ async def rag_security_and_tracing_middleware(request: Request, call_next):
 
     if settings.RATE_LIMIT_ENABLED:
         client_ip = (
-            request.headers.get("x-forwarded-for")
-            or (request.client.host if request.client else "unknown")
-        ).split(",")[0].strip()
+            (
+                request.headers.get("x-forwarded-for")
+                or (request.client.host if request.client else "unknown")
+            )
+            .split(",")[0]
+            .strip()
+        )
         allowed, retry_after = rate_limiter.check(client_ip)
         if not allowed:
             return JSONResponse(
@@ -144,6 +147,7 @@ async def rag_security_and_tracing_middleware(request: Request, call_next):
 # ============================================================
 # Health Probe
 # ============================================================
+
 
 @app.get("/health")
 async def health():
@@ -169,10 +173,10 @@ async def ready(request: Request):
     )
 
 
-
 # ============================================================
 # Document Ingestion Routes
 # ============================================================
+
 
 @app.post("/documents", response_model=DocumentUploadResponse)
 async def upload_document(
@@ -365,6 +369,7 @@ async def delete_document(doc_id: str, _auth: None = Depends(verify_api_key)):
 # Retrieval & Query Route
 # ============================================================
 
+
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
     """Retrieve and cross-encoder re-rank document chunks via hybrid (BM25 + Dense) or dense search."""
@@ -432,8 +437,11 @@ async def answer_question(request: QueryRequest, raw_request: Request):
 
     call_kwargs = {}
     import inspect
+
     sig = inspect.signature(generate_grounded_answer)
-    if "request_id" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+    if "request_id" in sig.parameters or any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    ):
         call_kwargs["request_id"] = req_id
 
     answer_resp = await generate_grounded_answer(
@@ -443,4 +451,3 @@ async def answer_question(request: QueryRequest, raw_request: Request):
         **call_kwargs,
     )
     return answer_resp
-

@@ -15,12 +15,10 @@ Evaluates on eval/datasets/hybrid_eval.jsonl across both:
 import csv
 import json
 import logging
-import os
-from pathlib import Path
 import shutil
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("hybrid_eval")
@@ -28,13 +26,13 @@ logger = logging.getLogger("hybrid_eval")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 
+from rag_service.chunking import chunk_document
 from rag_service.config import Settings
 from rag_service.embeddings import EmbeddingModel
-from rag_service.reranker import Reranker
 from rag_service.parsers import extract_pages_from_pdf
-from rag_service.chunking import chunk_document
-from rag_service.store import ChromaStore
+from rag_service.reranker import Reranker
 from rag_service.retriever import Retriever
+from rag_service.store import ChromaStore
 
 
 def run_hybrid_evaluation():
@@ -92,7 +90,11 @@ def run_hybrid_evaluation():
         store.add_chunks("structure", chunks, embeddings, doc_id=doc_id)
         total_indexed_chunks += len(chunks)
 
-    logger.info("Indexed %d structure chunks across %d documents into ChromaDB.", total_indexed_chunks, len(doc_files))
+    logger.info(
+        "Indexed %d structure chunks across %d documents into ChromaDB.",
+        total_indexed_chunks,
+        len(doc_files),
+    )
 
     # Define Configurations to Benchmark
     configs = [
@@ -194,26 +196,40 @@ def run_hybrid_evaluation():
         mrr = round(sum(reciprocal_ranks) / n, 4)
         mean_lat = round(sum(latencies) / n, 2)
 
-        kw_hit1 = round((cat_hits_at_1["keyword_acronym"] / (cat_counts["keyword_acronym"] or 1)) * 100.0, 1)
-        conc_hit1 = round((cat_hits_at_1["conceptual_paraphrase"] / (cat_counts["conceptual_paraphrase"] or 1)) * 100.0, 1)
+        kw_hit1 = round(
+            (cat_hits_at_1["keyword_acronym"] / (cat_counts["keyword_acronym"] or 1)) * 100.0, 1
+        )
+        conc_hit1 = round(
+            (cat_hits_at_1["conceptual_paraphrase"] / (cat_counts["conceptual_paraphrase"] or 1))
+            * 100.0,
+            1,
+        )
 
         logger.info(
             "[%s] Overall Hit@1: %s%% | Hit@3: %s%% | MRR: %s | Keyword Hit@1: %s%% | Conceptual Hit@1: %s%% | Latency: %sms",
-            conf_name, hit1_pct, hit3_pct, mrr, kw_hit1, conc_hit1, mean_lat
+            conf_name,
+            hit1_pct,
+            hit3_pct,
+            mrr,
+            kw_hit1,
+            conc_hit1,
+            mean_lat,
         )
 
-        benchmark_rows.append({
-            "Configuration": conf_name,
-            "Mode": mode,
-            "Re-Ranker": "On" if use_reranker else "Off",
-            "RRF k": rrf_k,
-            "Hit@1 (%)": hit1_pct,
-            "Hit@3 (%)": hit3_pct,
-            "MRR": mrr,
-            "Keyword Hit@1 (%)": kw_hit1,
-            "Conceptual Hit@1 (%)": conc_hit1,
-            "Mean Latency (ms)": mean_lat,
-        })
+        benchmark_rows.append(
+            {
+                "Configuration": conf_name,
+                "Mode": mode,
+                "Re-Ranker": "On" if use_reranker else "Off",
+                "RRF k": rrf_k,
+                "Hit@1 (%)": hit1_pct,
+                "Hit@3 (%)": hit3_pct,
+                "MRR": mrr,
+                "Keyword Hit@1 (%)": kw_hit1,
+                "Conceptual Hit@1 (%)": conc_hit1,
+                "Mean Latency (ms)": mean_lat,
+            }
+        )
 
     # Save CSV Report
     csv_path = results_dir / "hybrid_report.csv"
@@ -228,11 +244,15 @@ def run_hybrid_evaluation():
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# Hybrid Retrieval & Reciprocal Rank Fusion (RRF) Benchmark Report\n\n")
         f.write(f"**Date:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"**Dense Model:** `BAAI/bge-small-en-v1.5`\n")
-        f.write(f"**Sparse Model:** Okapi BM25 ($k_1=1.5, b=0.75$)\n")
-        f.write(f"**Cross-Encoder:** `BAAI/bge-reranker-base`\n")
-        f.write(f"**Evaluation Corpus:** 4 technical documents ({total_indexed_chunks} structure chunks)\n")
-        f.write(f"**Test Set:** `eval/datasets/hybrid_eval.jsonl` (24 queries: 12 keyword/acronym + 12 conceptual)\n\n")
+        f.write("**Dense Model:** `BAAI/bge-small-en-v1.5`\n")
+        f.write("**Sparse Model:** Okapi BM25 ($k_1=1.5, b=0.75$)\n")
+        f.write("**Cross-Encoder:** `BAAI/bge-reranker-base`\n")
+        f.write(
+            f"**Evaluation Corpus:** 4 technical documents ({total_indexed_chunks} structure chunks)\n"
+        )
+        f.write(
+            "**Test Set:** `eval/datasets/hybrid_eval.jsonl` (24 queries: 12 keyword/acronym + 12 conceptual)\n\n"
+        )
 
         f.write("---\n\n## 1. Executive Summary\n\n")
         f.write(
@@ -241,7 +261,9 @@ def run_hybrid_evaluation():
         )
 
         f.write("### Benchmark Matrix\n\n")
-        f.write("| Configuration | Re-Ranker | RRF $k$ | Overall Hit@1 | Overall Hit@3 | MRR | Keyword Hit@1 | Conceptual Hit@1 | Latency (ms) |\n")
+        f.write(
+            "| Configuration | Re-Ranker | RRF $k$ | Overall Hit@1 | Overall Hit@3 | MRR | Keyword Hit@1 | Conceptual Hit@1 | Latency (ms) |\n"
+        )
         f.write("|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
         for row in benchmark_rows:
             f.write(

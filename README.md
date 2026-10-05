@@ -151,13 +151,57 @@ uv run python scripts/demo.py
 uv run python scripts/demo.py --benchmark-only
 ```
 
+### Run with the Official OpenAI Python SDK
+The SLM Gateway provides drop-in compatibility with the official `openai` Python SDK:
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key=os.environ.get("GATEWAY_API_KEY", "not-needed-locally"),
+)
+
+# Standard chat completion with streaming
+stream = client.chat.completions.create(
+    model="microsoft/Phi-3-mini-4k-instruct",
+    messages=[
+        {"role": "system", "content": "You are a concise technical assistant."},
+        {"role": "user", "content": "Explain how Raft handles leader heartbeats."},
+    ],
+    stream=True,
+)
+
+for chunk in stream:
+    token = chunk.choices[0].delta.content or ""
+    print(token, end="", flush=True)
+print()
+```
+
+### Makefile Reference
+A standard `Makefile` is provided for common development and evaluation workflows:
+```bash
+make up                 # Start services via Docker Compose
+make down               # Stop Docker Compose services
+make test               # Run unit and integration tests (non-slow)
+make test-cov           # Run test suite with pytest coverage reporting
+make lint               # Run ruff lint, format check, and mypy type checks
+make format             # Auto-format codebase with ruff
+make eval-squad         # Run the empirical 8-configuration SQuAD benchmark
+make eval-faithfulness  # Run RAG answer quality & faithfulness evaluation
+```
+
 ### Run the Tests
 ```bash
 # Run all unit and integration tests:
 uv run pytest gateway/tests rag/tests -m "not slow"
+
+# Or run with test coverage reporting:
+uv run pytest gateway/tests rag/tests -m "not slow" --cov=slm_gateway --cov=rag_service --cov-report=term-missing
 ```
 
 ---
+
 
 ## 3. Key Evaluation Results (Supporting Evidence)
 

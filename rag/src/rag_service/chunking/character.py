@@ -5,6 +5,7 @@ to whitespace so words are not cut in half, returning standardized Chunk objects
 """
 
 from typing import List
+
 from .base import Chunk
 
 

@@ -1,10 +1,9 @@
 """Tests for the two-stage RAG retrieval pipeline (ChromaStore + BGE Reranker)."""
 
 from pathlib import Path
-import pytest
 
+import pytest
 from rag_service.chunking.base import Chunk
-from rag_service.config import Settings
 from rag_service.embeddings import EmbeddingModel
 from rag_service.reranker import Reranker
 from rag_service.retriever import Retriever
@@ -176,4 +175,3 @@ def test_hybrid_custom_rrf_k(tiny_corpus_retriever):
     assert len(results) > 0
     top = results[0]
     assert top.rrf_score is not None and top.rrf_score > 0.0
-

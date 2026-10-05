@@ -1,41 +1,63 @@
 # ==============================================================================
-# RAG Service Dockerfile
+# RAG Service Dockerfile (Multi-Stage Build)
 #
 # Container Specification:
-# - Pinned Python 3.10 slim base image
-# - Non-root execution (appuser:10001) for container hardening
+# - Pinned base image: python:3.10.16-slim-bookworm
+# - Multi-stage build: builder compiles wheels; runtime contains only runtime deps
+# - Non-root execution: appuser (UID 10001) for container hardening
 # - Healthcheck on /health endpoint
-# - Persistent ChromaDB directory with appropriate non-root ownership
+# - Persistent ChromaDB directory with appuser permissions
 # ==============================================================================
 
-FROM python:3.10-slim
+# ------------------------------------------------------------------------------
+# Stage 1: Builder Stage
+# ------------------------------------------------------------------------------
+FROM python:3.10.16-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+# Install build dependencies for compiling native wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+# Create isolated virtual environment
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+COPY pyproject.toml README.md ./
+RUN uv pip install --no-cache -e .
+
+# ------------------------------------------------------------------------------
+# Stage 2: Runtime Stage
+# ------------------------------------------------------------------------------
+FROM python:3.10.16-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Install minimal OS dependencies for healthcheck, OCR, and native wheels
+# Install minimal runtime dependencies (curl for healthcheck, tesseract for OCR fallback)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    build-essential \
     tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast, reliable package installation
-RUN pip install --no-cache-dir uv
+# Copy compiled virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
 
-# Copy dependency specifications
-COPY pyproject.toml ./
-
-# Install project dependencies
-RUN uv pip install --system --no-cache -e .
-
-# Copy RAG service source code
+# Copy RAG service source code and configuration
 COPY src/ ./src/
-COPY README.md ./
+COPY pyproject.toml README.md ./
 
 # Create data directories and unprivileged system user
 RUN mkdir -p /app/data/chroma && \
@@ -44,7 +66,6 @@ RUN mkdir -p /app/data/chroma && \
 
 USER appuser
 
-# Expose RAG HTTP service port
 EXPOSE 8001
 
 # Docker healthcheck testing liveness

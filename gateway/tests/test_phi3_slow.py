@@ -2,9 +2,8 @@
 
 import pytest
 import torch
-
-from slm_gateway.config import Settings
 from slm_gateway.backends.hf_local import HFLocalBackend
+from slm_gateway.config import Settings
 
 
 @pytest.mark.slow
@@ -26,9 +25,7 @@ async def test_phi3_real_inference():
         assert backend.is_ready()
         assert backend.get_model_name() == "microsoft/Phi-3-mini-4k-instruct"
 
-        messages = [
-            {"role": "user", "content": "What is 2 + 2? Answer in one word."}
-        ]
+        messages = [{"role": "user", "content": "What is 2 + 2? Answer in one word."}]
         content, prompt_tokens, completion_tokens, finish_reason = await backend.generate(
             messages=messages,
             temperature=0.0,

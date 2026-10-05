@@ -6,7 +6,6 @@ precision/recall/F1, a confusion matrix, a threshold sweep (0.30 - 0.80), and ou
 eval/results/router_report.md.
 """
 
-from collections import defaultdict
 import json
 import logging
 import os
@@ -18,7 +17,7 @@ if not os.environ.get("CI"):
 import re
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import yaml
@@ -29,8 +28,7 @@ GATEWAY_SRC = REPO_ROOT / "gateway" / "src"
 if str(GATEWAY_SRC) not in sys.path:
     sys.path.insert(0, str(GATEWAY_SRC))
 
-from slm_gateway.config import Settings
-from slm_gateway.router import IntentRouter, DEFAULT_INTENTS_PATH
+from slm_gateway.router import DEFAULT_INTENTS_PATH, IntentRouter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -165,20 +163,21 @@ def run_evaluation() -> None:
         routing = router.classify(query, threshold=0.0)  # get raw top-1 score without fallback
         latencies.append((time.perf_counter() - t0) * 1000)
 
-        results.append({
-            "query": query,
-            "expected": expected,
-            "raw_intent": routing.intent,
-            "confidence": routing.confidence,
-            "scores_by_intent": routing.scores_by_intent,
-        })
+        results.append(
+            {
+                "query": query,
+                "expected": expected,
+                "raw_intent": routing.intent,
+                "confidence": routing.confidence,
+                "scores_by_intent": routing.scores_by_intent,
+            }
+        )
 
     # 5. Evaluate at default threshold (0.55)
     default_threshold = 0.55
     y_true = [r["expected"] for r in results]
     y_pred_default = [
-        r["raw_intent"] if r["confidence"] >= default_threshold else "general"
-        for r in results
+        r["raw_intent"] if r["confidence"] >= default_threshold else "general" for r in results
     ]
     base_metrics = compute_metrics(y_true, y_pred_default, intents)
 
@@ -189,18 +188,17 @@ def run_evaluation() -> None:
     best_acc = 0.0
 
     for thresh in thresholds:
-        y_pred = [
-            r["raw_intent"] if r["confidence"] >= thresh else "general"
-            for r in results
-        ]
+        y_pred = [r["raw_intent"] if r["confidence"] >= thresh else "general" for r in results]
         m = compute_metrics(y_true, y_pred, intents)
         fallbacks = sum(1 for r in results if r["confidence"] < thresh)
-        sweep_results.append({
-            "threshold": thresh,
-            "accuracy": m["accuracy"],
-            "correct": m["correct"],
-            "fallbacks": fallbacks,
-        })
+        sweep_results.append(
+            {
+                "threshold": thresh,
+                "accuracy": m["accuracy"],
+                "correct": m["correct"],
+                "fallbacks": fallbacks,
+            }
+        )
         if m["accuracy"] > best_acc:
             best_acc = m["accuracy"]
             best_thresh = thresh
@@ -220,7 +218,9 @@ def run_evaluation() -> None:
             f"{data['recall'] * 100:>8.1f}% {data['f1'] * 100:>8.1f}%"
         )
     print("-" * 58)
-    print(f"Latency: Mean={np.mean(latencies):.2f}ms, P50={np.percentile(latencies, 50):.2f}ms, P95={np.percentile(latencies, 95):.2f}ms\n")
+    print(
+        f"Latency: Mean={np.mean(latencies):.2f}ms, P50={np.percentile(latencies, 50):.2f}ms, P95={np.percentile(latencies, 95):.2f}ms\n"
+    )
 
     # 8. Generate Markdown Report
     generate_markdown_report(
@@ -265,7 +265,7 @@ def generate_markdown_report(
         "",
         f"- **Overall Accuracy:** `{base_metrics['accuracy'] * 100:.2f}%` ({base_metrics['correct']} / {base_metrics['total']} correct)",
         f"- **Mean Classification Latency:** `{np.mean(latencies):.2f} ms` (P50: `{np.percentile(latencies, 50):.2f} ms`, P95: `{np.percentile(latencies, 95):.2f} ms`)",
-        f"- **Exemplar Leakage:** `0 duplicates` verified between evaluation set and training exemplars.",
+        "- **Exemplar Leakage:** `0 duplicates` verified between evaluation set and training exemplars.",
         "",
         "---",
         "",
@@ -281,17 +281,19 @@ def generate_markdown_report(
             f"| **`{intent}`** | {d['support']} | {d['precision'] * 100:.1f}% | {d['recall'] * 100:.1f}% | {d['f1'] * 100:.1f}% |"
         )
 
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## 3. Confusion Matrix",
-        "",
-        f"Rows represent ground-truth labels; columns represent router predictions at threshold `{default_threshold}`.",
-        "",
-        "| Ground Truth \\ Predicted | " + " | ".join(f"`{i}`" for i in intents) + " |",
-        "| :--- | " + " | ".join(":---:" for _ in intents) + " |",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "## 3. Confusion Matrix",
+            "",
+            f"Rows represent ground-truth labels; columns represent router predictions at threshold `{default_threshold}`.",
+            "",
+            "| Ground Truth \\ Predicted | " + " | ".join(f"`{i}`" for i in intents) + " |",
+            "| :--- | " + " | ".join(":---:" for _ in intents) + " |",
+        ]
+    )
 
     for true_i in intents:
         row = [f"**`{true_i}`**"]
@@ -301,17 +303,19 @@ def generate_markdown_report(
             row.append(cell)
         lines.append("| " + " | ".join(row) + " |")
 
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## 4. Threshold Sweep (0.30 - 0.80)",
-        "",
-        "A threshold sweep assesses router sensitivity: scores below threshold trigger a fallback to `general`.",
-        "",
-        "| Threshold | Accuracy | Correct / Total | Fallbacks to `general` |",
-        "| :---: | :---: | :---: | :---: |",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "## 4. Threshold Sweep (0.30 - 0.80)",
+            "",
+            "A threshold sweep assesses router sensitivity: scores below threshold trigger a fallback to `general`.",
+            "",
+            "| Threshold | Accuracy | Correct / Total | Fallbacks to `general` |",
+            "| :---: | :---: | :---: | :---: |",
+        ]
+    )
 
     for s in sweep_results:
         marker = " (Default)" if s["threshold"] == default_threshold else ""
@@ -319,32 +323,34 @@ def generate_markdown_report(
             f"| `{s['threshold']:.2f}`{marker} | {s['accuracy'] * 100:.1f}% | {s['correct']}/{len(results)} | {s['fallbacks']} |"
         )
 
-    lines.extend([
-        "",
-        "### Threshold Selection Rationale",
-        f"- **Selected Operating Threshold:** `{default_threshold}`",
-        f"- At `0.55`, the model maintains high discriminatory confidence across all distinct intents (`{base_metrics['accuracy'] * 100:.1f}%` accuracy) while preventing out-of-domain conversational noise from misrouting into specialized routes like `rag`.",
-        f"- Thresholds above `0.70` become overly conservative, causing legitimate borderline queries to collapse into `general` fallback.",
-        f"- Thresholds below `0.45` risk routing ambiguous queries into specialized handlers without sufficient semantic alignment.",
-        "",
-        "---",
-        "",
-        "## 5. Tricky Edge-Case Analysis",
-        "",
-        "The evaluation suite intentionally tested ambiguous and overlapping edge cases:",
-        "",
-        "1. **Technical query mentioning 'document':**",
-        "   - Query: *'How does MongoDB index and query nested document structures inside collections?'*",
-        "   - Correctly classified as: `technical` (high similarity to database/storage exemplars rather than PDF QA).",
-        "",
-        "2. **RAG query referencing technical components:**",
-        "   - Query: *'According to the uploaded system design document, which port does the Redis cluster listen on?'*",
-        "   - Correctly classified as: `rag` (explicit document grounding correctly routes to retrieval pipeline).",
-        "",
-        "3. **General knowledge query with numbers and coding history:**",
-        "   - Query: *'Who was Ada Lovelace and why is she celebrated as the earliest computer pioneer?'*",
-        "   - Correctly classified as: `general` (biographical historical query, avoiding false technical classification).",
-    ])
+    lines.extend(
+        [
+            "",
+            "### Threshold Selection Rationale",
+            f"- **Selected Operating Threshold:** `{default_threshold}`",
+            f"- At `0.55`, the model maintains high discriminatory confidence across all distinct intents (`{base_metrics['accuracy'] * 100:.1f}%` accuracy) while preventing out-of-domain conversational noise from misrouting into specialized routes like `rag`.",
+            "- Thresholds above `0.70` become overly conservative, causing legitimate borderline queries to collapse into `general` fallback.",
+            "- Thresholds below `0.45` risk routing ambiguous queries into specialized handlers without sufficient semantic alignment.",
+            "",
+            "---",
+            "",
+            "## 5. Tricky Edge-Case Analysis",
+            "",
+            "The evaluation suite intentionally tested ambiguous and overlapping edge cases:",
+            "",
+            "1. **Technical query mentioning 'document':**",
+            "   - Query: *'How does MongoDB index and query nested document structures inside collections?'*",
+            "   - Correctly classified as: `technical` (high similarity to database/storage exemplars rather than PDF QA).",
+            "",
+            "2. **RAG query referencing technical components:**",
+            "   - Query: *'According to the uploaded system design document, which port does the Redis cluster listen on?'*",
+            "   - Correctly classified as: `rag` (explicit document grounding correctly routes to retrieval pipeline).",
+            "",
+            "3. **General knowledge query with numbers and coding history:**",
+            "   - Query: *'Who was Ada Lovelace and why is she celebrated as the earliest computer pioneer?'*",
+            "   - Correctly classified as: `general` (biographical historical query, avoiding false technical classification).",
+        ]
+    )
 
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

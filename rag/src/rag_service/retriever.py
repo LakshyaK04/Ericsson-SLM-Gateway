@@ -6,7 +6,7 @@ Per Section 5.5:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .bm25 import BM25Index, reciprocal_rank_fusion
 from .config import Settings, settings
@@ -135,7 +135,9 @@ class Retriever:
             )
 
         if not candidates:
-            logger.info("No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy)
+            logger.info(
+                "No candidate chunks retrieved for query '%s' under strategy '%s'.", query, strategy
+            )
             return []
 
         # Stage 2: Cross-Encoder Re-Ranking (optional)
@@ -152,7 +154,9 @@ class Retriever:
                 sort_key = "bm25_score"
             else:
                 sort_key = "dense_score"
-            reranked = sorted(candidates, key=lambda c: c.get(sort_key, 0.0), reverse=True)[:final_k]
+            reranked = sorted(candidates, key=lambda c: c.get(sort_key, 0.0), reverse=True)[
+                :final_k
+            ]
 
         # Convert to Pydantic items
         items = [

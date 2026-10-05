@@ -203,8 +203,8 @@ def generate_report(**kwargs):
         "",
         "## Summary",
         "",
-        f"| Metric | Value |",
-        f"|---|---|",
+        "| Metric | Value |",
+        "|---|---|",
         f"| Total Cases | {len(kwargs['recall_cases']) + len(kwargs['fp_cases']) + len(kwargs['multi_cases'])} |",
         f"| Recall Rate | {kwargs['recall_rate']:.2f}% |",
         f"| False-Positive Rate | {kwargs['fp_rate']:.2f}% |",
@@ -222,15 +222,17 @@ def generate_report(**kwargs):
         recall_pct = (stats["detected"] / stats["total"] * 100) if stats["total"] > 0 else 0.0
         lines.append(f"| `{entity}` | {stats['total']} | {stats['detected']} | {recall_pct:.1f}% |")
 
-    lines.extend([
-        "",
-        "## False-Positive Analysis",
-        "",
-        f"- **Clean queries tested:** {len(kwargs['fp_cases'])}",
-        f"- **Incorrectly redacted:** {kwargs['fp_fail']}",
-        f"- **False-positive rate:** {kwargs['fp_rate']:.2f}%",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## False-Positive Analysis",
+            "",
+            f"- **Clean queries tested:** {len(kwargs['fp_cases'])}",
+            f"- **Incorrectly redacted:** {kwargs['fp_fail']}",
+            f"- **False-positive rate:** {kwargs['fp_rate']:.2f}%",
+            "",
+        ]
+    )
 
     if kwargs["fp_failures"]:
         lines.append("### False-Positive Failures")
@@ -241,22 +243,26 @@ def generate_report(**kwargs):
             lines.append(f"  - Redaction count: {fp['count']}")
             lines.append("")
 
-    lines.extend([
-        "## Multi-Entity Detection",
-        "",
-        f"- **Multi-entity cases:** {len(kwargs['multi_cases'])}",
-        f"- **Passed (>=2 redactions):** {kwargs['multi_pass']}",
-        f"- **Failed:** {kwargs['multi_fail']}",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Multi-Entity Detection",
+            "",
+            f"- **Multi-entity cases:** {len(kwargs['multi_cases'])}",
+            f"- **Passed (>=2 redactions):** {kwargs['multi_pass']}",
+            f"- **Failed:** {kwargs['multi_fail']}",
+            "",
+        ]
+    )
 
     # Entity failures
     failed_entities = {e: s for e, s in entity_stats.items() if s["failures"]}
     if failed_entities:
-        lines.extend([
-            "## Recall Failures",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Recall Failures",
+                "",
+            ]
+        )
         for entity, stats in failed_entities.items():
             lines.append(f"### `{entity}`")
             for fail_text in stats["failures"]:

@@ -4,9 +4,9 @@ Implements hybrid retrieval combining dense vector search (BGE-small bi-encoder)
 with sparse lexical search (Okapi BM25) fused via Reciprocal Rank Fusion (RRF).
 """
 
-from collections import Counter, defaultdict
 import math
 import re
+from collections import Counter, defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -102,7 +102,9 @@ class BM25Index:
                 term_count = tf[q_term]
                 term_idf = self.idf.get(q_term, 0.0)
                 numerator = term_count * (self.k1 + 1.0)
-                denominator = term_count + self.k1 * (1.0 - self.b + self.b * (doc_len / (self.avgdl or 1.0)))
+                denominator = term_count + self.k1 * (
+                    1.0 - self.b + self.b * (doc_len / (self.avgdl or 1.0))
+                )
                 score += term_idf * (numerator / denominator)
 
             if score > 0:

@@ -1,12 +1,13 @@
 """Base definitions for document chunking."""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 @dataclass
 class Chunk:
     """Standardized chunk representation across all chunking strategies per Section 5.4."""
+
     chunk_id: str
     text: str
     source: str

@@ -1,10 +1,10 @@
 """In-process HuggingFace backend using Phi-3-mini and bitsandbytes."""
 
 import asyncio
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 from threading import Thread
-from typing import AsyncIterator, Dict, List, Optional, Tuple
+from typing import AsyncIterator, Dict, List, Tuple
 
 import torch
 from transformers import (
@@ -22,11 +22,13 @@ logger = logging.getLogger(__name__)
 
 class InferenceQueueFullError(Exception):
     """Raised when the in-process inference queue is at capacity."""
+
     pass
 
 
 class InferenceTimeoutError(Exception):
     """Raised when an inference request times out waiting in the execution queue."""
+
     pass
 
 
@@ -94,6 +96,7 @@ class HFLocalBackend(LLMBackend):
         has_cuda = torch.cuda.is_available()
 
         from transformers import AutoConfig
+
         model_config = AutoConfig.from_pretrained(self.model_id)
         if not hasattr(model_config, "rope_theta"):
             model_config.rope_theta = 10000.0
@@ -108,7 +111,9 @@ class HFLocalBackend(LLMBackend):
                     "Set QUANTIZE=none or use BACKEND=openai_compatible."
                 )
 
-            logger.info("Configuring 4-bit NF4 quantization for GPU: %s", torch.cuda.get_device_name(0))
+            logger.info(
+                "Configuring 4-bit NF4 quantization for GPU: %s", torch.cuda.get_device_name(0)
+            )
             quant_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
@@ -138,7 +143,9 @@ class HFLocalBackend(LLMBackend):
     def get_model_name(self) -> str:
         return self.model_id
 
-    def _trim_messages_if_needed(self, messages: List[Dict[str, str]], max_tokens: int) -> List[Dict[str, str]]:
+    def _trim_messages_if_needed(
+        self, messages: List[Dict[str, str]], max_tokens: int
+    ) -> List[Dict[str, str]]:
         """Trim oldest messages if total tokens exceed max_context."""
         active_messages = list(messages)
         preserve_system = len(active_messages) > 0 and active_messages[0].get("role") == "system"
@@ -169,7 +176,11 @@ class HFLocalBackend(LLMBackend):
             # Trim the oldest non-system message
             trim_idx = 1 if preserve_system else 0
             dropped = active_messages.pop(trim_idx)
-            logger.warning("Context limit approached: trimmed message (%s): %s...", dropped.get("role"), dropped.get("content", "")[:30])
+            logger.warning(
+                "Context limit approached: trimmed message (%s): %s...",
+                dropped.get("role"),
+                dropped.get("content", "")[:30],
+            )
 
     def _generate_sync(
         self,

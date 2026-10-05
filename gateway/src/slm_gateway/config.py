@@ -5,6 +5,7 @@ using pydantic-settings.
 """
 
 from typing import Literal, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,8 +46,8 @@ class Settings(BaseSettings):
 
     # Security & limits
     MAX_REQUEST_BODY_BYTES: int = 1_048_576  # 1MB max JSON body
-    MAX_REQUEST_MESSAGES: int = 100         # Max conversation turns per request
-    MAX_MESSAGE_CHARS: int = 32_768         # Max character count per message (~8k tokens)
+    MAX_REQUEST_MESSAGES: int = 100  # Max conversation turns per request
+    MAX_MESSAGE_CHARS: int = 32_768  # Max character count per message (~8k tokens)
 
     # In-memory rate limiting per client IP
     RATE_LIMIT_ENABLED: bool = False
@@ -62,14 +63,15 @@ class Settings(BaseSettings):
     ROUTER_THRESHOLD: float = 0.55
     INTENTS_FILE: Optional[str] = None
     PII_FAIL_MODE: Literal["closed", "open"] = "closed"
-    PROJECT_CODENAMES: Optional[str] = None  # Comma-separated deny-list, e.g. "Phoenix,Titan,Aurora"
+    PROJECT_CODENAMES: Optional[str] = (
+        None  # Comma-separated deny-list, e.g. "Phoenix,Titan,Aurora"
+    )
     RAG_SERVICE_URL: str = "http://localhost:8001"
-    RAG_API_KEY: Optional[str] = None        # Optional Bearer token when authenticating to RAG service
+    RAG_API_KEY: Optional[str] = None  # Optional Bearer token when authenticating to RAG service
     RAG_TIMEOUT_SECONDS: float = 180.0
     RAG_DEFAULT_STRATEGY: str = "structure"
-    RAG_STREAMING_ENABLED: bool = True       # True end-to-end SSE token streaming from RAG service
+    RAG_STREAMING_ENABLED: bool = True  # True end-to-end SSE token streaming from RAG service
 
 
 # Global settings singleton
 settings = Settings()
-

@@ -3,6 +3,7 @@
 import json
 import logging
 from typing import AsyncIterator, Dict, List, Tuple
+
 import httpx
 
 from ..config import Settings
@@ -74,7 +75,9 @@ class OpenAICompatibleBackend(LLMBackend):
             return content, prompt_tokens, completion_tokens, finish_reason
         except httpx.HTTPStatusError as e:
             logger.error("Backend returned HTTP %d: %s", e.response.status_code, e.response.text)
-            raise RuntimeError(f"Backend HTTP error {e.response.status_code}: {e.response.text}") from e
+            raise RuntimeError(
+                f"Backend HTTP error {e.response.status_code}: {e.response.text}"
+            ) from e
         except httpx.RequestError as e:
             logger.error("Failed to connect to backend endpoint %s: %s", self.endpoint, str(e))
             raise RuntimeError(f"Backend connection error: {str(e)}") from e
@@ -119,8 +122,12 @@ class OpenAICompatibleBackend(LLMBackend):
                     except json.JSONDecodeError:
                         continue
         except httpx.HTTPStatusError as e:
-            logger.error("Backend streaming returned HTTP %d: %s", e.response.status_code, e.response.text)
-            raise RuntimeError(f"Backend HTTP error {e.response.status_code}: {e.response.text}") from e
+            logger.error(
+                "Backend streaming returned HTTP %d: %s", e.response.status_code, e.response.text
+            )
+            raise RuntimeError(
+                f"Backend HTTP error {e.response.status_code}: {e.response.text}"
+            ) from e
         except httpx.RequestError as e:
             logger.error("Failed to connect to backend endpoint %s: %s", self.endpoint, str(e))
             raise RuntimeError(f"Backend connection error: {str(e)}") from e

@@ -16,12 +16,11 @@ and hallucination detection across a 25-query benchmark set:
    - Paraphrase and semantic variation limits
 """
 
-import json
 import logging
-from pathlib import Path
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -30,7 +29,6 @@ logger = logging.getLogger("faithfulness_eval")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 
-from rag_service.generation import SYSTEM_PROMPT
 
 REFUSAL_ANSWER = "The provided documents do not contain enough information to answer this question."
 
@@ -47,14 +45,52 @@ def extract_citations(text: str) -> List[int]:
 def extract_factual_tokens(text: str) -> Set[str]:
     """Extract significant factual tokens (alphanumeric entities, numbers, technical terms)."""
     stops = {
-        "the", "and", "for", "that", "this", "with", "from", "were", "been", "have", "they",
-        "which", "what", "when", "where", "who", "will", "more", "also", "into", "their",
-        "some", "then", "there", "other", "about", "after", "before", "between", "under",
-        "provided", "documents", "contain", "enough", "information", "answer", "question",
-        "according", "stated", "reference", "based"
+        "the",
+        "and",
+        "for",
+        "that",
+        "this",
+        "with",
+        "from",
+        "were",
+        "been",
+        "have",
+        "they",
+        "which",
+        "what",
+        "when",
+        "where",
+        "who",
+        "will",
+        "more",
+        "also",
+        "into",
+        "their",
+        "some",
+        "then",
+        "there",
+        "other",
+        "about",
+        "after",
+        "before",
+        "between",
+        "under",
+        "provided",
+        "documents",
+        "contain",
+        "enough",
+        "information",
+        "answer",
+        "question",
+        "according",
+        "stated",
+        "reference",
+        "based",
     }
     raw_tokens = re.findall(r"\b[A-Za-z0-9_-]{3,}\b", text.lower())
-    return {t for t in raw_tokens if t not in stops and not t.isdigit()} | {t for t in raw_tokens if t.isdigit()}
+    return {t for t in raw_tokens if t not in stops and not t.isdigit()} | {
+        t for t in raw_tokens if t.isdigit()
+    }
 
 
 def evaluate_grounding(
@@ -270,7 +306,6 @@ def build_evaluation_test_set() -> List[Dict[str, Any]]:
             "expected_grounded": True,
             "expected_refusal": False,
         },
-
         # --- Hallucinated / Adversarial Responses (16-20) ---
         {
             "id": "eval_h_16",
@@ -328,7 +363,6 @@ def build_evaluation_test_set() -> List[Dict[str, Any]]:
             "expected_grounded": False,
             "expected_refusal": False,
         },
-
         # --- Insufficient Context Refusals (21-25) ---
         {
             "id": "eval_r_21",
@@ -428,8 +462,7 @@ def run_faithfulness_evaluation():
 
         # 2. Refusal checks
         is_refusal = (
-            REFUSAL_ANSWER.lower() in ans.lower()
-            or "not contain enough information" in ans.lower()
+            REFUSAL_ANSWER.lower() in ans.lower() or "not contain enough information" in ans.lower()
         )
         if is_refusal_case:
             total_refusal_cases += 1
@@ -452,15 +485,17 @@ def run_faithfulness_evaluation():
             if hallucination_flag:
                 hallucinations_detected += 1
 
-        results_table.append({
-            "id": item["id"],
-            "category": item["category"],
-            "query": item["query"],
-            "citations": citations,
-            "grounding_score": grounding_score,
-            "ungrounded_tokens": ungrounded,
-            "is_refusal": is_refusal,
-        })
+        results_table.append(
+            {
+                "id": item["id"],
+                "category": item["category"],
+                "query": item["query"],
+                "citations": citations,
+                "grounding_score": grounding_score,
+                "ungrounded_tokens": ungrounded,
+                "is_refusal": is_refusal,
+            }
+        )
 
     # Metrics
     num_non_refusals = num_items - total_refusal_cases
@@ -487,18 +522,36 @@ def run_faithfulness_evaluation():
     with open(OUTPUT_REPORT, "w", encoding="utf-8") as f:
         f.write("# Grounded Answer Quality, Faithfulness & Citation Evaluation Report\n\n")
         f.write(f"- **Evaluation Run Date:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"- **Evaluated Pipeline:** Two-stage RAG generation (`SYSTEM_PROMPT` with numbered block citation format)\n")
-        f.write(f"- **Evaluation Methodology:** Rule-based citation extraction + factual token containment verification + refusal assertion analysis\n")
-        f.write(f"- **Sample Size:** {num_items} test cases (15 fully grounded + 5 hallucinated adversarial + 5 insufficient context refusals)\n\n")
+        f.write(
+            "- **Evaluated Pipeline:** Two-stage RAG generation (`SYSTEM_PROMPT` with numbered block citation format)\n"
+        )
+        f.write(
+            "- **Evaluation Methodology:** Rule-based citation extraction + factual token containment verification + refusal assertion analysis\n"
+        )
+        f.write(
+            f"- **Sample Size:** {num_items} test cases (15 fully grounded + 5 hallucinated adversarial + 5 insufficient context refusals)\n\n"
+        )
 
         f.write("---\n\n## 1. Quantitative Performance Matrix\n\n")
-        f.write("| Evaluation Dimension | Metric | Measured Value | Standard / Target | Description |\n")
+        f.write(
+            "| Evaluation Dimension | Metric | Measured Value | Standard / Target | Description |\n"
+        )
         f.write("|:---|:---|:---:|:---:|:---|\n")
-        f.write(f"| **Citation Compliance** | Citation Presence Rate | **{citation_presence_rate}%** | $\\ge 95\%$ | Percentage of non-refusal answers citing context blocks via `[N]` |\n")
-        f.write(f"| **Citation Accuracy** | Citation Precision | **{citation_precision}%** | $100\%$ | Percentage of cited block indices that map to valid retrieved chunks |\n")
-        f.write(f"| **Factual Groundedness** | Mean Grounding Ratio | **{mean_grounding}%** | $\\ge 85\%$ | Average percentage of factual/alphanumeric tokens corroborated by source context |\n")
-        f.write(f"| **Hallucination Detection** | Detection Sensitivity | **{hallucination_detection_rate}%** | $100\%$ | Ability to flag answers containing fabricated entities or numbers absent from context |\n")
-        f.write(f"| **Refusal Integrity** | Out-of-Domain Refusal Rate | **{refusal_accuracy}%** | $100\%$ | Accurate emission of standard refusal string when context is insufficient |\n\n")
+        f.write(
+            f"| **Citation Compliance** | Citation Presence Rate | **{citation_presence_rate}%** | $\\ge 95\\%$ | Percentage of non-refusal answers citing context blocks via `[N]` |\n"
+        )
+        f.write(
+            f"| **Citation Accuracy** | Citation Precision | **{citation_precision}%** | $100\\%$ | Percentage of cited block indices that map to valid retrieved chunks |\n"
+        )
+        f.write(
+            f"| **Factual Groundedness** | Mean Grounding Ratio | **{mean_grounding}%** | $\\ge 85\\%$ | Average percentage of factual/alphanumeric tokens corroborated by source context |\n"
+        )
+        f.write(
+            f"| **Hallucination Detection** | Detection Sensitivity | **{hallucination_detection_rate}%** | $100\\%$ | Ability to flag answers containing fabricated entities or numbers absent from context |\n"
+        )
+        f.write(
+            f"| **Refusal Integrity** | Out-of-Domain Refusal Rate | **{refusal_accuracy}%** | $100\\%$ | Accurate emission of standard refusal string when context is insufficient |\n\n"
+        )
 
         f.write("---\n\n## 2. Test Set Breakdown & Diagnostic Results\n\n")
         f.write("### 2.1 Grounded QA Samples with Citations\n")
@@ -511,14 +564,16 @@ def run_faithfulness_evaluation():
         f.write("### 2.2 Adversarial Hallucination Catch Cases\n")
         for r in results_table[15:18]:
             f.write(f"- **Query:** {r['query']}\n")
-            f.write(f"  - Grounding Score: **{r['grounding_score'] * 100:.1f}%** (Anomaly Detected)\n")
+            f.write(
+                f"  - Grounding Score: **{r['grounding_score'] * 100:.1f}%** (Anomaly Detected)\n"
+            )
             f.write(f"  - Flagged Ungrounded Tokens: `{r['ungrounded_tokens']}`\n\n")
 
         f.write("### 2.3 Insufficient Context Refusal Honesty\n")
         for r in results_table[20:23]:
             f.write(f"- **Query:** {r['query']}\n")
             f.write(f"  - Refusal Emitted: **{r['is_refusal']}** (`{REFUSAL_ANSWER}`)\n")
-            f.write(f"  - Hallucination Avoided: **Yes**\n\n")
+            f.write("  - Hallucination Avoided: **Yes**\n\n")
 
         f.write("---\n\n## 3. Explicit Methodological Limitations & Honest Disclosure\n\n")
         f.write(

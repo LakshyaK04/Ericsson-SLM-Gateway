@@ -1,7 +1,7 @@
 """Configuration for the RAG Service."""
 
-from pathlib import Path
 from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Upload & request size limits
     MAX_UPLOAD_SIZE_BYTES: int = 26_214_400  # 25MB max file upload
-    MAX_QUERY_LENGTH: int = 4096            # Max characters for retrieval query
+    MAX_QUERY_LENGTH: int = 4096  # Max characters for retrieval query
 
     # In-memory rate limiting per client IP
     RATE_LIMIT_ENABLED: bool = False
@@ -55,8 +55,10 @@ class Settings(BaseSettings):
     GATEWAY_TIMEOUT: float = 180.0
 
     # Grounded generation quality guards
-    RAG_MAX_CONTEXT_TOKENS: int = 3072         # Token-budget guard for Phi-3 4k context window
-    RERANKER_REFUSAL_THRESHOLD: float = 0.0    # If top chunk reranker score < threshold, refuse without calling LLM
+    RAG_MAX_CONTEXT_TOKENS: int = 3072  # Token-budget guard for Phi-3 4k context window
+    RERANKER_REFUSAL_THRESHOLD: float = (
+        0.0  # If top chunk reranker score < threshold, refuse without calling LLM
+    )
 
     # OCR configuration
     TESSERACT_CMD: Optional[str] = None

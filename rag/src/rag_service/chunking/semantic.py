@@ -6,7 +6,7 @@ to preserve context, using BAAI/bge-small-en-v1.5.
 """
 
 import re
-from typing import Any, List, Optional
+from typing import Any, List
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -24,9 +24,7 @@ def split_semantic_text(
     if not text or not text.strip():
         return []
 
-    sentences = [
-        s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()
-    ]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
     if not sentences:
         return []

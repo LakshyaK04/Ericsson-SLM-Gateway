@@ -5,6 +5,7 @@ Extracts text, paragraphs, and heading styles from Microsoft Word documents.
 
 from pathlib import Path
 from typing import List, Tuple, Union
+
 import docx
 
 
@@ -36,7 +37,7 @@ def extract_pages_from_docx(file_path: Union[str, Path]) -> List[Tuple[int, str]
             continue
         first_row_cells = [" ".join(cell.text.split()).strip() for cell in table.rows[0].cells]
         has_headers = any(first_row_cells) and len(table.rows) > 1
-        headers = [h if h else f"Col{i+1}" for i, h in enumerate(first_row_cells)]
+        headers = [h if h else f"Col{i + 1}" for i, h in enumerate(first_row_cells)]
 
         table_rows = []
         start_idx = 1 if has_headers else 0
@@ -47,7 +48,7 @@ def extract_pages_from_docx(file_path: Union[str, Path]) -> List[Tuple[int, str]
                 if not cell_text:
                     continue
                 if has_headers:
-                    h = headers[i] if i < len(headers) else f"Col{i+1}"
+                    h = headers[i] if i < len(headers) else f"Col{i + 1}"
                     row_parts.append(f"{h}: {cell_text}")
                 else:
                     row_parts.append(cell_text)

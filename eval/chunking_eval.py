@@ -18,14 +18,11 @@ Outputs:
 
 import json
 import logging
-import os
-from pathlib import Path
 import re
 import shutil
 import sys
-import tempfile
 import time
-from typing import Any, Dict, List
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
@@ -132,7 +129,11 @@ def run_evaluation():
             }
             logger.info(
                 "Indexed strategy '%s': %d chunks (avg len: %.1f chars, min: %d, max: %d).",
-                strat, total_chunks, avg_len, min_len, max_len
+                strat,
+                total_chunks,
+                avg_len,
+                min_len,
+                max_len,
             )
 
         # 2. Evaluate queries across all combinations: (strategy, use_reranker)
@@ -179,19 +180,21 @@ def run_evaluation():
                         rr_sum += 0.5
                     elif match_rank == 3:
                         hit_3_count += 1
-                        rr_sum += (1.0 / 3.0)
+                        rr_sum += 1.0 / 3.0
                     else:
                         rr_sum += 0.0
 
-                    detailed_results.append({
-                        "strategy": strat,
-                        "reranker": "On" if use_rerank else "Off",
-                        "question": query,
-                        "doc_name": doc_name,
-                        "expected_substring": item["expected_substring"],
-                        "match_rank": match_rank,
-                        "latency_ms": round(latency_ms, 2),
-                    })
+                    detailed_results.append(
+                        {
+                            "strategy": strat,
+                            "reranker": "On" if use_rerank else "Off",
+                            "question": query,
+                            "doc_name": doc_name,
+                            "expected_substring": item["expected_substring"],
+                            "match_rank": match_rank,
+                            "latency_ms": round(latency_ms, 2),
+                        }
+                    )
 
                 total_q = len(qa_dataset)
                 hit_1 = (hit_1_count / total_q) * 100.0
@@ -199,26 +202,35 @@ def run_evaluation():
                 mrr = rr_sum / total_q
                 avg_latency = sum(latencies) / len(latencies)
 
-                eval_records.append({
-                    "strategy": strat,
-                    "reranker": "On" if use_rerank else "Off",
-                    "total_chunks": chunk_stats[strat]["total_chunks"],
-                    "avg_length": chunk_stats[strat]["avg_length"],
-                    "hit_1": round(hit_1, 2),
-                    "hit_3": round(hit_3, 2),
-                    "mrr": round(mrr, 4),
-                    "avg_latency_ms": round(avg_latency, 2),
-                })
+                eval_records.append(
+                    {
+                        "strategy": strat,
+                        "reranker": "On" if use_rerank else "Off",
+                        "total_chunks": chunk_stats[strat]["total_chunks"],
+                        "avg_length": chunk_stats[strat]["avg_length"],
+                        "hit_1": round(hit_1, 2),
+                        "hit_3": round(hit_3, 2),
+                        "mrr": round(mrr, 4),
+                        "avg_latency_ms": round(avg_latency, 2),
+                    }
+                )
 
                 logger.info(
                     "Result [%s | Reranker: %s]: Hit@1=%.1f%%, Hit@3=%.1f%%, MRR=%.4f, Latency=%.1fms",
-                    strat, "On" if use_rerank else "Off", hit_1, hit_3, mrr, avg_latency
+                    strat,
+                    "On" if use_rerank else "Off",
+                    hit_1,
+                    hit_3,
+                    mrr,
+                    avg_latency,
                 )
 
         # 3. Write CSV report
         csv_path = results_dir / "chunking_report.csv"
         with open(csv_path, "w", encoding="utf-8") as f:
-            f.write("Strategy,Reranker,Total Chunks,Avg Length (chars),Hit@1 (%),Hit@3 (%),MRR,Avg Latency (ms)\n")
+            f.write(
+                "Strategy,Reranker,Total Chunks,Avg Length (chars),Hit@1 (%),Hit@3 (%),MRR,Avg Latency (ms)\n"
+            )
             for r in eval_records:
                 f.write(
                     f"{r['strategy']},{r['reranker']},{r['total_chunks']},{r['avg_length']},"
@@ -239,7 +251,9 @@ def run_evaluation():
             )
 
             f.write("## 2. Evaluation Results Summary\n\n")
-            f.write("| Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |\n")
+            f.write(
+                "| Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |\n"
+            )
             f.write("|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
             for r in eval_records:
                 f.write(
@@ -249,17 +263,27 @@ def run_evaluation():
             f.write("\n")
 
             f.write("## 3. Chunking Profile & Granularity\n\n")
-            f.write("| Strategy | Total Chunks | Avg Length | Min Length | Max Length | Granularity Assessment |\n")
+            f.write(
+                "| Strategy | Total Chunks | Avg Length | Min Length | Max Length | Granularity Assessment |\n"
+            )
             f.write("|---|:---:|:---:|:---:|:---:|---|\n")
             for strat in strategies:
                 st = chunk_stats[strat]
                 if strat == "character":
-                    notes = "Fixed 500-char sliding window with 50-char overlap. Can split mid-phrase."
+                    notes = (
+                        "Fixed 500-char sliding window with 50-char overlap. Can split mid-phrase."
+                    )
                 elif strat == "structure":
-                    notes = "Section/heading & paragraph aware. Preserves cohesive document sections."
+                    notes = (
+                        "Section/heading & paragraph aware. Preserves cohesive document sections."
+                    )
                 else:
-                    notes = "Sentence boundary & embedding similarity dips. Groups coherent thoughts."
-                f.write(f"| `{strat}` | {st['total_chunks']} | {st['avg_length']} | {st['min_length']} | {st['max_length']} | {notes} |\n")
+                    notes = (
+                        "Sentence boundary & embedding similarity dips. Groups coherent thoughts."
+                    )
+                f.write(
+                    f"| `{strat}` | {st['total_chunks']} | {st['avg_length']} | {st['min_length']} | {st['max_length']} | {notes} |\n"
+                )
             f.write("\n")
 
             # Compute dynamic delta metrics per strategy
@@ -308,11 +332,16 @@ def run_evaluation():
             else:
                 f.write("\n")
 
-
             f.write("### 4.2 Strategy Comparison\n")
-            f.write("- **Structure Chunking**: Yields natural conceptual boundaries for technical documents with section headers, lists, and defined paragraphs. Achieved 100% Hit@1 with re-ranking.\n")
-            f.write("- **Semantic Chunking**: Groups conceptually aligned sentences based on embedding similarity drops. Effective for dense prose, though requires sentence embedding overhead.\n")
-            f.write("- **Character Chunking**: Simple baseline with predictable sizes, but occasionally fractures sentences across chunk boundaries.\n\n")
+            f.write(
+                "- **Structure Chunking**: Yields natural conceptual boundaries for technical documents with section headers, lists, and defined paragraphs. Achieved 100% Hit@1 with re-ranking.\n"
+            )
+            f.write(
+                "- **Semantic Chunking**: Groups conceptually aligned sentences based on embedding similarity drops. Effective for dense prose, though requires sentence embedding overhead.\n"
+            )
+            f.write(
+                "- **Character Chunking**: Simple baseline with predictable sizes, but occasionally fractures sentences across chunk boundaries.\n\n"
+            )
 
             f.write("## 5. Dataset Limitations & Honest Commentary\n\n")
             f.write(

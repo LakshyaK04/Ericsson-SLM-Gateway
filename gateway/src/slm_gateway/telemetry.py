@@ -8,9 +8,8 @@ Exports standard Prometheus / OpenMetrics plain-text format (0.0.4) on /metrics:
 - gateway_active_requests: Gauge of in-flight inference requests
 """
 
-from collections import defaultdict
 import threading
-import time
+from collections import defaultdict
 from typing import Dict, Tuple
 
 
@@ -65,16 +64,22 @@ class MetricsCollector:
             lines.append(f"gateway_active_requests {self._active_requests}")
 
             # 2. Total requests counter
-            lines.append("# HELP gateway_requests_total Total number of chat completions processed.")
+            lines.append(
+                "# HELP gateway_requests_total Total number of chat completions processed."
+            )
             lines.append("# TYPE gateway_requests_total counter")
             if not self._requests:
                 lines.append('gateway_requests_total{intent="none",status="200"} 0')
             else:
                 for (intent, status), count in sorted(self._requests.items()):
-                    lines.append(f'gateway_requests_total{{intent="{intent}",status="{status}"}} {count}')
+                    lines.append(
+                        f'gateway_requests_total{{intent="{intent}",status="{status}"}} {count}'
+                    )
 
             # 3. PII redactions counter
-            lines.append("# HELP gateway_pii_redactions_total Total number of sensitive PII entities redacted.")
+            lines.append(
+                "# HELP gateway_pii_redactions_total Total number of sensitive PII entities redacted."
+            )
             lines.append("# TYPE gateway_pii_redactions_total counter")
             lines.append(f"gateway_pii_redactions_total {self._pii_redactions}")
 
@@ -82,10 +87,14 @@ class MetricsCollector:
             lines.append("# HELP gateway_tokens_total Total tokens processed and generated.")
             lines.append("# TYPE gateway_tokens_total counter")
             lines.append(f'gateway_tokens_total{{type="prompt"}} {self._tokens.get("prompt", 0)}')
-            lines.append(f'gateway_tokens_total{{type="completion"}} {self._tokens.get("completion", 0)}')
+            lines.append(
+                f'gateway_tokens_total{{type="completion"}} {self._tokens.get("completion", 0)}'
+            )
 
             # 5. Request duration summary
-            lines.append("# HELP gateway_request_duration_seconds Total execution time for chat completion requests.")
+            lines.append(
+                "# HELP gateway_request_duration_seconds Total execution time for chat completion requests."
+            )
             lines.append("# TYPE gateway_request_duration_seconds summary")
             lines.append(f"gateway_request_duration_seconds_sum {self._total_duration_seconds:.6f}")
             lines.append(f"gateway_request_duration_seconds_count {self._request_count}")

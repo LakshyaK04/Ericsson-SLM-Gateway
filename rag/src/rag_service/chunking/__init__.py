@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base import Chunk
 from .character import character_chunking, split_character_text
-from .structure import structure_chunking, split_structure_text
 from .semantic import semantic_chunking, split_semantic_text
+from .structure import split_structure_text, structure_chunking
 
 
 def chunk_document(
