@@ -262,11 +262,52 @@ def run_evaluation():
                 f.write(f"| `{strat}` | {st['total_chunks']} | {st['avg_length']} | {st['min_length']} | {st['max_length']} | {notes} |\n")
             f.write("\n")
 
+            # Compute dynamic delta metrics per strategy
+            strat_map = {}
+            for r in eval_records:
+                s = r["strategy"]
+                strat_map.setdefault(s, {})[r["reranker"]] = r
+
+            struct_off = strat_map.get("structure", {}).get("Off", {})
+            struct_on = strat_map.get("structure", {}).get("On", {})
+            sem_off = strat_map.get("semantic", {}).get("Off", {})
+            sem_on = strat_map.get("semantic", {}).get("On", {})
+            char_off = strat_map.get("character", {}).get("Off", {})
+            char_on = strat_map.get("character", {}).get("On", {})
+
             f.write("## 4. Key Findings & Analysis\n\n")
             f.write("### 4.1 Impact of Cross-Encoder Re-Ranking\n")
-            f.write("- **Selective Hit@1 Improvement**: Neural cross-encoder re-ranking improved Hit@1 for `structure` (86.1% to 100.0%) and `semantic` (80.6% to 94.4%).\n")
-            f.write("- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), possibly because severed sentences lack full context for cross-attention.\n")
-            f.write("- **Measured Latency Cost**: Re-ranking 20 candidates adds cross-encoder inference overhead, raising total query latency from ~20-25ms to ~215-235ms.\n\n")
+            if struct_off and struct_on and sem_off and sem_on:
+                struct_delta = struct_on["hit_1"] - struct_off["hit_1"]
+                sem_delta = sem_on["hit_1"] - sem_off["hit_1"]
+                f.write(
+                    f"- **Hit@1 Improvements**: Cross-encoder re-ranking improved Hit@1 for `structure` "
+                    f"({struct_off['hit_1']:.2f}% to {struct_on['hit_1']:.2f}%, +{struct_delta:.2f} pp) "
+                    f"and `semantic` ({sem_off['hit_1']:.2f}% to {sem_on['hit_1']:.2f}%, +{sem_delta:.2f} pp).\n"
+                )
+
+            if char_off and char_on:
+                char_h1_delta = char_on["hit_1"] - char_off["hit_1"]
+                char_h3_delta = char_on["hit_3"] - char_off["hit_3"]
+                f.write(
+                    f"- **Character Chunking Trade-off**: Re-ranking character chunking changed Hit@1 "
+                    f"from {char_off['hit_1']:.2f}% to {char_on['hit_1']:.2f}% ({'+' if char_h1_delta >= 0 else ''}{char_h1_delta:.2f} pp), "
+                    f"while Hit@3 shifted from {char_off['hit_3']:.2f}% to {char_on['hit_3']:.2f}% ({'+' if char_h3_delta >= 0 else ''}{char_h3_delta:.2f} pp).\n"
+                )
+
+            off_lats = [r["avg_latency_ms"] for r in eval_records if r["reranker"] == "Off"]
+            on_lats = [r["avg_latency_ms"] for r in eval_records if r["reranker"] == "On"]
+            if off_lats and on_lats:
+                min_off, max_off = min(off_lats), max(off_lats)
+                min_on, max_on = min(on_lats), max(on_lats)
+                f.write(
+                    f"- **Measured Latency Cost**: Dense search lookup alone averaged ~{min_off:.1f}-{max_off:.1f} ms on CPU; "
+                    f"adding neural cross-encoder re-ranking on CPU added cross-attention inference overhead, "
+                    f"raising total latency to ~{min_on:.1f}-{max_on:.1f} ms per query.\n\n"
+                )
+            else:
+                f.write("\n")
+
 
             f.write("### 4.2 Strategy Comparison\n")
             f.write("- **Structure Chunking**: Yields natural conceptual boundaries for technical documents with section headers, lists, and defined paragraphs. Achieved 100% Hit@1 with re-ranking.\n")

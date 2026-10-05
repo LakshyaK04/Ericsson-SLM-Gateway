@@ -26,9 +26,10 @@ This report evaluates three chunking strategies (`character`, `structure`, `sema
 ## 4. Key Findings & Analysis
 
 ### 4.1 Impact of Cross-Encoder Re-Ranking
-- **Selective Hit@1 Improvement**: Neural cross-encoder re-ranking improved Hit@1 for `structure` (86.1% to 100.0%) and `semantic` (80.6% to 94.4%).
-- **No Improvement on Character Chunking Hit@1**: Re-ranking did not improve character chunking on Hit@1 (86.1% without vs 83.3% with), possibly because severed sentences lack full context for cross-attention.
-- **Measured Latency Cost**: Re-ranking 20 candidates adds cross-encoder inference overhead, raising total query latency from ~20-25ms to ~215-235ms.
+- **Hit@1 Improvements**: Cross-encoder re-ranking improved Hit@1 for `structure` (94.44% to 100.00%, +5.56 pp) and `semantic` (88.89% to 94.44%, +5.55 pp).
+- **Character Chunking Trade-off**: Re-ranking character chunking changed Hit@1 from 86.11% to 88.89% (+2.78 pp), while Hit@3 shifted from 100.00% to 97.22% (-2.78 pp).
+- **Measured Latency Cost**: Dense search lookup alone averaged ~15.5-16.0 ms on CPU; adding neural cross-encoder re-ranking on CPU added cross-attention inference overhead, raising total latency to ~1025.1-1175.0 ms per query.
+
 
 ### 4.2 Strategy Comparison
 - **Structure Chunking**: Yields natural conceptual boundaries for technical documents with section headers, lists, and defined paragraphs. Achieved 100% Hit@1 with re-ranking.
