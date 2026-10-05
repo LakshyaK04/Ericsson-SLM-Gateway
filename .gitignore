@@ -54,3 +54,7 @@ notes_private/
 
 # Explicitly track uv lockfile for reproducibility
 !uv.lock
+
+# Raw benchmark datasets
+eval/datasets/*_raw.json
+

@@ -93,6 +93,14 @@ class HFLocalBackend(LLMBackend):
 
         has_cuda = torch.cuda.is_available()
 
+        from transformers import AutoConfig
+        model_config = AutoConfig.from_pretrained(self.model_id)
+        if not hasattr(model_config, "rope_theta"):
+            model_config.rope_theta = 10000.0
+        if hasattr(model_config, "rope_scaling") and isinstance(model_config.rope_scaling, dict):
+            if "type" not in model_config.rope_scaling and "rope_type" in model_config.rope_scaling:
+                model_config.rope_scaling["type"] = model_config.rope_scaling["rope_type"]
+
         if self.quantize == "4bit":
             if not has_cuda:
                 raise RuntimeError(
@@ -109,6 +117,7 @@ class HFLocalBackend(LLMBackend):
             )
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_id,
+                config=model_config,
                 quantization_config=quant_config,
                 device_map=self.config.DEVICE,
             )

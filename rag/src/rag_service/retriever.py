@@ -60,6 +60,8 @@ class Retriever:
         use_reranker: bool = True,
         retrieval_mode: str = "hybrid",
         rrf_k: int = 60,
+        dense_weight: float = 1.0,
+        sparse_weight: float = 1.0,
     ) -> List[QueryResultItem]:
         """Execute hybrid two-stage retrieval and return re-ranked chunks with all scores.
 
@@ -78,6 +80,8 @@ class Retriever:
             use_reranker: Whether to apply neural cross-encoder re-ranking (default True).
             retrieval_mode: 'hybrid' (BM25 + Dense RRF), 'sparse' (BM25 only), or 'dense' (vector only).
             rrf_k: Reciprocal Rank Fusion smoothing constant (default 60).
+            dense_weight: Relative weight multiplier for dense ranks (default 1.0).
+            sparse_weight: Relative weight multiplier for sparse ranks (default 1.0).
 
         Returns:
             List of QueryResultItem instances.
@@ -117,6 +121,8 @@ class Retriever:
                 lexical_results=lexical_candidates,
                 rrf_k=rrf_k,
                 top_k=retrieve_k,
+                dense_weight=dense_weight,
+                sparse_weight=sparse_weight,
             )
         else:
             # Dense Vector Retrieval Only

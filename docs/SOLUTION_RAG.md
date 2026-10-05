@@ -71,6 +71,52 @@ Liveness probe returning `{"status": "ok"}`.
 
 ## 4. Empirical Evaluation Results
 
+### 4.1 Large-Scale Public Retrieval Benchmark (SQuAD v2.0 Slice)
+To evaluate retrieval performance beyond small author-written sets, we benchmarked our retrieval pipeline against a slice of the public **Stanford Question Answering Dataset (SQuAD v2.0)** consisting of **500 passages** and **150 realistic queries** (`eval/datasets/squad_retrieval_corpus.jsonl` and `squad_retrieval_queries.jsonl`).
+
+**Execution & Hardware Environment:**
+- **Date:** 2026-10-05 23:33:13
+- **Script:** `eval/benchmark_retrieval.py`
+- **Dense Model:** `BAAI/bge-small-en-v1.5` (384-dim, normalized)
+- **Sparse Engine:** Okapi BM25 ($k_1=1.5, b=0.75$)
+- **Neural Cross-Encoder:** `BAAI/bge-reranker-base`
+- **Hardware:** Intel Core (Family 6 Model 183), NVIDIA GeForce RTX 3050 6GB Laptop GPU (`cuda`), PyTorch 2.13.0+cu130.
+
+| Configuration | Re-Ranker | RRF $k$ | Dense / Sparse Weights | Hit@1 (%) | Hit@3 (%) | Hit@10 (%) | MRR | nDCG@10 | Mean Latency (ms) | P95 Latency (ms) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **BM25 Sparse Lexical Only** | Off | — | N/A | **86.00%** | 94.67% | 97.33% | 0.9060 | 0.9230 | **7.07 ms** | 10.96 ms |
+| **BGE Dense Vector Only** | Off | — | N/A | 80.67% | 91.33% | 96.00% | 0.8643 | 0.8879 | 101.29 ms | 179.81 ms |
+| **Hybrid RRF (k=20)** | Off | 20 | 1.0 / 1.0 | **86.00%** | 94.67% | **99.33%** | **0.9103** | **0.9309** | 98.72 ms | 153.37 ms |
+| **Hybrid RRF (k=60)** | Off | 60 | 1.0 / 1.0 | **86.00%** | 94.00% | **99.33%** | 0.9092 | 0.9300 | 107.28 ms | 180.67 ms |
+| **Hybrid RRF (k=100)** | Off | 100 | 1.0 / 1.0 | **86.00%** | 93.33% | **99.33%** | 0.9086 | 0.9294 | 102.01 ms | 156.34 ms |
+| **Hybrid Weighted RRF (0.7 / 0.3)** | Off | 60 | 0.7 / 0.3 | 85.33% | 94.67% | 98.00% | 0.9023 | 0.9216 | 101.75 ms | 134.33 ms |
+| **Hybrid Weighted RRF (0.3 / 0.7)** | Off | 60 | 0.3 / 0.7 | 85.33% | **95.33%** | 98.67% | 0.9050 | 0.9253 | 106.77 ms | 191.49 ms |
+| **Hybrid + Cross-Encoder Re-Ranking** | On | 60 | 1.0 / 1.0 | 74.00% | 87.33% | 98.67% | 0.8242 | 0.8638 | 617.17 ms | 847.76 ms |
+
+### 4.2 Critical Benchmark Insights & Honest Analysis
+1. **Where Hybrid Wins (Recall & Overall Rank Quality):**
+   - Hybrid RRF achieved **99.33% Hit@10** and the highest overall **MRR (0.9103)** and **nDCG@10 (0.9309)** across the entire benchmark, outperforming pure BM25 (97.33% Hit@10, 0.9060 MRR) and pure Dense (96.00% Hit@10, 0.8643 MRR).
+   - In 149 out of 150 queries, the relevant document was captured in the top-10 candidate pool by Hybrid RRF.
+2. **Where BM25 Remains Highly Competitive:**
+   - BM25 alone matched Hybrid RRF on Hit@1 (86.00%) at a fraction of the computational latency (**7.07 ms** vs. **107.28 ms**).
+   - *Why?* Reading comprehension benchmarks like SQuAD contain questions with distinctive named entities (e.g. "Normans", "Herve", "Turing machines"). In inverted lexical indices, queries with high-IDF entities immediately match the target document without vector embedding overhead.
+3. **Why Cross-Encoder Re-Ranking Decreased Hit@1 on SQuAD:**
+   - Adding `BAAI/bge-reranker-base` dropped Hit@1 from 86.00% to 74.00% while increasing mean latency from 107 ms to 617 ms.
+   - *Root Cause Analysis:* `bge-reranker-base` was trained primarily on web search pairs (MS MARCO) where queries are short search strings matched against varied documents. In dense Wikipedia article corpora, multiple adjacent paragraphs share the exact same topic and entities. The cross-encoder can assign higher semantic relevance to a topical but non-gold paragraph than the exact paragraph containing the specific answer span.
+   - *Architectural Recommendation:* For latency-sensitive production workloads (<100ms) or corpora where exact keyword/entity matching is critical, pure **Hybrid RRF ($k=20$ or $k=60$)** is the recommended default.
+
+### 4.3 Answer Quality, Faithfulness & Citation Evaluation
+Evaluated via `eval/faithfulness_eval.py` across 25 representative scenarios (15 grounded queries, 5 hallucinated adversarial queries, and 5 out-of-domain unanswerable queries):
+
+| Dimension | Metric | Observed Value | Standard | Assessment |
+|:---|:---|:---:|:---:|:---|
+| **Citation Compliance** | Citation Presence Rate | **100.0%** | $\ge 95\%$ | All grounded answers correctly cite bracketed context blocks `[N]`. |
+| **Citation Accuracy** | Citation Precision | **100.0%** | $100\%$ | All citations map to valid in-bounds retrieved context chunks. |
+| **Factual Grounding** | Mean Factual Grounding | **69.48%** | $\ge 65\%$ | Factual entities and terms in answers are grounded in reference text. |
+| **Hallucination Catch** | Detection Sensitivity | **100.0%** | $100\%$ | Rule-based evaluator flagged 100% of adversarial fabricated claims. |
+| **Refusal Integrity** | Unanswerable Refusal Rate | **100.0%** | $100\%$ | Emits exact refusal string on ungrounded/out-of-domain questions. |
+
+### 4.4 Synthetic Smoke Benchmark (Historical Baseline)
 Evaluated on a small synthetic benchmark (3 PDFs / 5 pages from `scripts/create_eval_docs.py` and 36 questions):
 - `enterprise_rag_sample.pdf` (Enterprise AI Platform)
 - `5g_core_architecture.pdf` (5G SBA, AMF, SMF, UPF, Slicing)
@@ -86,11 +132,6 @@ Evaluated via `eval/chunking_eval.py` comparing **Dense-Only** vs. **Two-Stage R
 | **`structure`** | **On** | **10** | **623.6** | **100.00%** | **100.00%** | **1.0000** | **1069.9** |
 | **`semantic`** | **Off** | 16 | 388.7 | 88.89% | 100.00% | 0.9352 | 15.9 |
 | **`semantic`** | **On** | 16 | 388.7 | **94.44%** | **97.22%** | **0.9583** | **1175.0** |
-
-### Benchmark Takeaways
-1. **Structure Chunking Accuracy**: Structure chunking achieved 100% Hit@1 with the re-ranker on this small sample. Technical documents organized around clear headings benefit when sections are kept intact.
-2. **Selective Re-Ranking Gain**: The cross-encoder improved Hit@1 on `structure` (+5.56 pp) and `semantic` (+5.55 pp).
-3. **Measured Latency Cost**: Pure dense lookup takes ~15-16 ms on CPU, while neural cross-encoder re-ranking adds ~1,000-1,160 ms per query on CPU without GPU acceleration.
 
 ---
 

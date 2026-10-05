@@ -126,16 +126,20 @@ def reciprocal_rank_fusion(
     lexical_results: List[Dict[str, Any]],
     rrf_k: int = 60,
     top_k: int = 20,
+    dense_weight: float = 1.0,
+    sparse_weight: float = 1.0,
 ) -> List[Dict[str, Any]]:
     """Fuse dense vector rankings and sparse BM25 rankings using Reciprocal Rank Fusion (RRF).
 
-    Formula: RRF_score(d) = sum_{m in models} 1 / (rrf_k + rank_m(d))
+    Formula: RRF_score(d) = dense_weight / (rrf_k + rank_dense(d)) + sparse_weight / (rrf_k + rank_sparse(d))
 
     Args:
         dense_results: Ranked chunk list from dense bi-encoder.
         lexical_results: Ranked chunk list from BM25 sparse search.
         rrf_k: Constant smoothing parameter (standard default 60).
         top_k: Number of fused results to return.
+        dense_weight: Relative weight multiplier for dense ranks (default 1.0).
+        sparse_weight: Relative weight multiplier for sparse ranks (default 1.0).
 
     Returns:
         List of deduplicated chunk dictionaries ordered by fused RRF score.
@@ -146,7 +150,7 @@ def reciprocal_rank_fusion(
     # 1. Rank contributions from dense bi-encoder
     for rank, chunk in enumerate(dense_results, start=1):
         cid = chunk["chunk_id"]
-        rrf_scores[cid] += 1.0 / (rrf_k + rank)
+        rrf_scores[cid] += float(dense_weight) / (rrf_k + rank)
         if cid not in chunk_map:
             chunk_map[cid] = dict(chunk)
         chunk_map[cid]["dense_rank"] = rank
@@ -154,7 +158,7 @@ def reciprocal_rank_fusion(
     # 2. Rank contributions from lexical BM25
     for rank, chunk in enumerate(lexical_results, start=1):
         cid = chunk["chunk_id"]
-        rrf_scores[cid] += 1.0 / (rrf_k + rank)
+        rrf_scores[cid] += float(sparse_weight) / (rrf_k + rank)
         if cid not in chunk_map:
             chunk_map[cid] = dict(chunk)
         chunk_map[cid]["bm25_score"] = chunk.get("bm25_score", 0.0)

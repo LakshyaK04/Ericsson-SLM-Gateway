@@ -1,0 +1,9 @@
+Configuration,Mode,Re-Ranker,RRF k,Weights (Dense/Sparse),Hit@1 (%),Hit@3 (%),Hit@10 (%),MRR,nDCG@10,Mean Latency (ms),P95 Latency (ms)
+BM25 Sparse Lexical Only,sparse,Off,60,N/A,86.0,94.67,97.33,0.906,0.923,7.07,10.96
+BGE Dense Vector Only,dense,Off,60,N/A,80.67,91.33,96.0,0.8643,0.8879,101.29,179.81
+Hybrid RRF (k=60),hybrid,Off,60,1.0 / 1.0,86.0,94.0,99.33,0.9092,0.93,107.28,180.67
+Hybrid RRF (k=20),hybrid,Off,20,1.0 / 1.0,86.0,94.67,99.33,0.9103,0.9309,98.72,153.37
+Hybrid RRF (k=100),hybrid,Off,100,1.0 / 1.0,86.0,93.33,99.33,0.9086,0.9294,102.01,156.34
+Hybrid Weighted RRF (Dense 0.7 / Sparse 0.3),hybrid,Off,60,0.7 / 0.3,85.33,94.67,98.0,0.9023,0.9216,101.75,134.33
+Hybrid Weighted RRF (Dense 0.3 / Sparse 0.7),hybrid,Off,60,0.3 / 0.7,85.33,95.33,98.67,0.905,0.9253,106.77,191.49
+Hybrid + Cross-Encoder Re-Ranking,hybrid,On (bge-reranker-base),60,1.0 / 1.0,74.0,87.33,98.67,0.8242,0.8638,617.17,847.76
