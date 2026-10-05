@@ -233,3 +233,46 @@ def test_gateway_fail_closed_returns_500(monkeypatch):
     assert data["error"]["type"] == "pii_redaction_error"
     # Backend must NOT have received any messages
     assert len(mock_backend.received_messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_gateway_lifespan_fail_closed_aborts_startup(monkeypatch):
+    """When PII_FAIL_MODE is closed and PII redactor initialization fails, lifespan must abort with RuntimeError."""
+    from slm_gateway.main import lifespan
+    from fastapi import FastAPI
+    import slm_gateway.main as main_mod
+
+    test_app = FastAPI()
+    test_app.state.backend = RecordingMockBackend()
+    test_app.state.router = "mock_router"
+    monkeypatch.setattr(main_mod.settings, "PII_FAIL_MODE", "closed")
+
+    def failing_get_redactor(*args, **kwargs):
+        raise RuntimeError("Presidio initialization failed")
+
+    monkeypatch.setattr("slm_gateway.main.get_redactor", failing_get_redactor)
+
+    with pytest.raises(RuntimeError, match="SLM Gateway startup aborted"):
+        async with lifespan(test_app):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_gateway_lifespan_fail_open_continues_with_warning(monkeypatch):
+    """When PII_FAIL_MODE is open and PII redactor initialization fails, lifespan must log warning and continue."""
+    from slm_gateway.main import lifespan
+    from fastapi import FastAPI
+    import slm_gateway.main as main_mod
+
+    test_app = FastAPI()
+    test_app.state.backend = RecordingMockBackend()
+    test_app.state.router = "mock_router"
+    monkeypatch.setattr(main_mod.settings, "PII_FAIL_MODE", "open")
+
+    def failing_get_redactor(*args, **kwargs):
+        raise RuntimeError("Presidio initialization failed")
+
+    monkeypatch.setattr("slm_gateway.main.get_redactor", failing_get_redactor)
+
+    async with lifespan(test_app):
+        assert getattr(test_app.state, "pii_redactor", None) is None

@@ -39,49 +39,48 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Backend, PII & Router instances
-backend: Optional[LLMBackend] = None
-pii_redactor: Optional[PIIRedactor] = None
-router_instance: Optional[IntentRouter] = None
-rag_client_instance: Optional[RAGClient] = None
-
-
+# Lifespan context manager: loads dependencies into app.state
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model backend, PII redactor, and intent router once at startup per rule 5."""
-    global backend, pii_redactor, router_instance, rag_client_instance
-    if pii_redactor is None:
+    if getattr(app.state, "pii_redactor", None) is None:
         logger.info("Initializing SLM Gateway PII redactor...")
         try:
-            pii_redactor = get_redactor(settings)
+            app.state.pii_redactor = get_redactor(settings)
         except Exception as e:
             logger.error("Failed to load PII redactor: %s", str(e), exc_info=True)
-    app.state.pii_redactor = pii_redactor
+            if settings.PII_FAIL_MODE == "closed":
+                raise RuntimeError(
+                    f"SLM Gateway startup aborted: Presidio PII redactor failed to initialize with PII_FAIL_MODE=closed: {e}"
+                ) from e
+            logger.warning("Operating in PII fail-open mode; startup continuing without PII redaction.")
+            app.state.pii_redactor = None
 
-    if router_instance is None:
+    if getattr(app.state, "router", None) is None:
         logger.info("Initializing SLM Gateway Intent router...")
         try:
-            router_instance = get_router(settings)
+            app.state.router = get_router(settings)
         except Exception as e:
             logger.error("Failed to load Intent router: %s", str(e), exc_info=True)
-    app.state.router = router_instance
+            app.state.router = None
 
-    if rag_client_instance is None:
-        rag_client_instance = RAGClient(settings)
-    app.state.rag_client = rag_client_instance
+    if getattr(app.state, "rag_client", None) is None:
+        app.state.rag_client = RAGClient(settings)
 
-    if backend is None:
+    if getattr(app.state, "backend", None) is None:
         logger.info("Initializing SLM Gateway backend: %s...", settings.BACKEND)
-        backend = get_backend(settings)
+        loaded_backend = get_backend(settings)
         try:
-            await backend.load()
+            await loaded_backend.load()
         except Exception as e:
             logger.error("Failed to load backend during startup: %s", str(e), exc_info=True)
-    app.state.backend = backend
+        app.state.backend = loaded_backend
+
     yield
     logger.info("Shutting down SLM Gateway...")
-    if backend:
-        await backend.close()
+    shutdown_backend = getattr(app.state, "backend", None)
+    if shutdown_backend:
+        await shutdown_backend.close()
 
 
 app = FastAPI(
@@ -95,7 +94,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -180,17 +179,19 @@ async def health():
 
 
 @app.get("/ready")
-async def ready():
+async def ready(request: Request):
     """Readiness probe: 200 only when model backend and router are fully loaded per section 4."""
-    global router_instance
-    if router_instance is None:
+    router = getattr(request.app.state, "router", None)
+    if router is None:
         try:
-            router_instance = get_router(settings)
+            router = get_router(settings)
+            request.app.state.router = router
         except Exception as e:
             logger.warning("Router not initialized yet: %s", e)
 
+    backend = getattr(request.app.state, "backend", None)
     backend_ready = backend is not None and backend.is_ready()
-    router_ready = router_instance is not None
+    router_ready = router is not None
 
     if backend_ready and router_ready:
         return {
@@ -260,8 +261,9 @@ def verify_api_key(authorization: Optional[str] = Header(None)) -> None:
 
 
 @app.get("/v1/models", response_model=ModelListResponse)
-async def list_models(_auth: None = Depends(verify_api_key)):
+async def list_models(raw_request: Request, _auth: None = Depends(verify_api_key)):
     """Return loaded model in OpenAI list format."""
+    backend = getattr(raw_request.app.state, "backend", None)
     model_name = backend.get_model_name() if backend else settings.MODEL_ID
     return ModelListResponse(
         data=[
@@ -277,6 +279,7 @@ async def list_models(_auth: None = Depends(verify_api_key)):
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(
     request: ChatCompletionRequest,
+    raw_request: Request,
     x_bypass_router: Optional[str] = Header(None, alias="X-Bypass-Router"),
     x_rag_strategy: Optional[str] = Header(None, alias="X-RAG-Strategy"),
     _auth: None = Depends(verify_api_key),
@@ -287,6 +290,7 @@ async def chat_completions(
     prompts are scrubbed of PII before any model sees them, routes to RAG only when
     document context is required, and formats results in standard OpenAI shape.
     """
+    backend = getattr(raw_request.app.state, "backend", None)
     if backend is None or not backend.is_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -322,7 +326,7 @@ async def chat_completions(
     # 1. Redact PII from user messages
     total_redactions = 0
     sanitized_messages = []
-    redactor = pii_redactor or get_redactor(settings)
+    redactor = getattr(raw_request.app.state, "pii_redactor", None) or get_redactor(settings)
 
     for message in request.messages:
         msg_dict = message.model_dump()
@@ -363,13 +367,13 @@ async def chat_completions(
         ]
         query_to_route = user_queries[-1] if user_queries else ""
 
-        router = router_instance or get_router(settings)
+        router = getattr(raw_request.app.state, "router", None) or get_router(settings)
         route_result = router.classify(query_to_route)
         x_routing = route_result.to_dict()
 
         # Apply intent effects: 'rag' calls the RAG service if documents are indexed
         if route_result.intent == "rag":
-            rag_cli = rag_client_instance or RAGClient(settings)
+            rag_cli = getattr(raw_request.app.state, "rag_client", None) or RAGClient(settings)
             has_docs, check_err = await rag_cli.has_indexed_documents()
             if not has_docs:
                 if check_err == "no_documents_indexed":
@@ -608,3 +612,46 @@ async def chat_completions(
         x_routing=x_routing,
         x_pii={"redactions": total_redactions},
     )
+
+
+# ============================================================
+# Compatibility Module Wrapper
+# Ensures external references/tests accessing slm_gateway.main.backend
+# or monkeypatching attributes seamlessly read/write app.state.
+# ============================================================
+import sys
+
+class _GatewayModule(sys.modules[__name__].__class__):
+    @property
+    def backend(self):
+        return getattr(app.state, "backend", None)
+
+    @backend.setter
+    def backend(self, value):
+        app.state.backend = value
+
+    @property
+    def pii_redactor(self):
+        return getattr(app.state, "pii_redactor", None)
+
+    @pii_redactor.setter
+    def pii_redactor(self, value):
+        app.state.pii_redactor = value
+
+    @property
+    def router_instance(self):
+        return getattr(app.state, "router", None)
+
+    @router_instance.setter
+    def router_instance(self, value):
+        app.state.router = value
+
+    @property
+    def rag_client_instance(self):
+        return getattr(app.state, "rag_client", None)
+
+    @rag_client_instance.setter
+    def rag_client_instance(self, value):
+        app.state.rag_client = value
+
+sys.modules[__name__].__class__ = _GatewayModule

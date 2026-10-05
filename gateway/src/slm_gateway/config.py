@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = False
     GATEWAY_API_KEY: Optional[str] = None  # Optional Bearer key enforcement per spec
+    CORS_ALLOW_ORIGINS: str = "http://localhost:8000,http://localhost:8001"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
     # LLM Backend
     BACKEND: Literal["hf_local", "openai_compatible"] = "hf_local"

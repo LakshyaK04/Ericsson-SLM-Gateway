@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8001
     DEBUG: bool = False
+    CORS_ALLOW_ORIGINS: str = "http://localhost:8000,http://localhost:8001"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
     # Storage paths
     CHROMA_PERSIST_DIR: str = "data/chroma"

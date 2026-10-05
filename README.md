@@ -84,8 +84,28 @@ graph TD
 
 ### Prerequisites
 - Python 3.10
-- `uv` package manager (or standard virtualenv)
+- `uv` package manager
 - NVIDIA GPU recommended for in-process 4-bit model serving (or CPU fallback via `BACKEND=openai_compatible`)
+
+### Installation & Environment Setup
+```bash
+# Clone the repository and configure environment variables
+cp .env.example .env
+
+# Standard installation (GPU / CUDA 13.0 wheels):
+uv sync --all-packages --all-groups
+
+# CPU-Only Installation Path:
+# If you are on a CPU-only machine or prefer lightweight CPU PyTorch wheels:
+uv sync --all-packages --all-groups --no-install-package torch
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+### Configuration & Security
+Key settings in `.env` (refer to `.env.example` for the complete list):
+- `CORS_ALLOW_ORIGINS`: Comma-separated list of allowed web origins (default: `http://localhost:8000,http://localhost:8001`). Replaces insecure wildcard configurations.
+- `PII_FAIL_MODE`: Set to `closed` (default: aborts gateway startup if Presidio fails to initialize) or `open` (logs warning and continues).
+- `GATEWAY_API_KEY`: Optional Bearer authentication secret. If set, requires `Authorization: Bearer <key>`.
 
 ### Run Services
 ```bash
