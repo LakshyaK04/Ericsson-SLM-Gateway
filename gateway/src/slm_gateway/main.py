@@ -498,6 +498,89 @@ async def chat_completions(
                     x_routing["warning"] = f"RAG service unavailable ({check_err}); fell back to local model."
                 x_routing["route"] = "hf_local"
             else:
+                model_name = request.model or "rag-pipeline"
+
+                # True token streaming when requested and enabled
+                if request.stream and getattr(settings, "RAG_STREAMING_ENABLED", True) and hasattr(rag_cli, "stream_answer"):
+                    x_routing["route"] = "rag_service"
+
+                    async def stream_rag_live_tokens():
+                        chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+                        created = int(time.time())
+                        first_chunk = True
+                        try:
+                            async for item in rag_cli.stream_answer(
+                                query=query_to_route,
+                                strategy=selected_strategy,
+                                request_id=req_id,
+                            ):
+                                if "error" in item:
+                                    logger.warning("RAG streaming error: %s", item["error"])
+                                    break
+                                if item.get("done"):
+                                    break
+
+                                if first_chunk:
+                                    meta_chunk = ChatCompletionChunk(
+                                        id=chunk_id,
+                                        created=created,
+                                        model=model_name,
+                                        choices=[
+                                            ChatCompletionChunkChoice(
+                                                index=0,
+                                                delta=ChatCompletionChunkDelta(role="assistant", content=""),
+                                                finish_reason=None,
+                                            )
+                                        ],
+                                        x_routing=x_routing,
+                                        x_pii={"redactions": total_redactions},
+                                        x_sources=item.get("x_sources", []),
+                                    )
+                                    yield f"data: {meta_chunk.model_dump_json()}\n\n"
+                                    first_chunk = False
+
+                                choices = item.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content_tok = delta.get("content", "")
+                                    finish = choices[0].get("finish_reason")
+                                    if content_tok or finish:
+                                        chunk = ChatCompletionChunk(
+                                            id=chunk_id,
+                                            created=created,
+                                            model=model_name,
+                                            choices=[
+                                                ChatCompletionChunkChoice(
+                                                    index=0,
+                                                    delta=ChatCompletionChunkDelta(content=content_tok if content_tok else None),
+                                                    finish_reason=finish,
+                                                )
+                                            ],
+                                        )
+                                        yield f"data: {chunk.model_dump_json()}\n\n"
+
+                            stop_chunk = ChatCompletionChunk(
+                                id=chunk_id,
+                                created=created,
+                                model=model_name,
+                                choices=[
+                                    ChatCompletionChunkChoice(
+                                        index=0,
+                                        delta=ChatCompletionChunkDelta(),
+                                        finish_reason="stop",
+                                    )
+                                ],
+                            )
+                            yield f"data: {stop_chunk.model_dump_json()}\n\n"
+                            yield "data: [DONE]\n\n"
+                        finally:
+                            telemetry.dec_active_requests()
+                            telemetry.record_pii_redactions(total_redactions)
+                            telemetry.record_request("rag", 200, time.perf_counter() - t0)
+
+                    return StreamingResponse(stream_rag_live_tokens(), media_type="text/event-stream")
+
+                # Non-streaming or fallback generate-then-replay
                 rag_resp, rag_err = await rag_cli.get_answer(
                     query=query_to_route,
                     strategy=selected_strategy,
@@ -511,8 +594,6 @@ async def chat_completions(
                     rag_content = rag_resp.get("answer", "")
                     rag_sources = rag_resp.get("sources", [])
                     raw_usage = rag_resp.get("usage", {})
-
-                    model_name = request.model or "rag-pipeline"
 
                     if request.stream:
                         async def stream_rag_chunks():

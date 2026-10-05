@@ -498,6 +498,57 @@ def test_x_request_id_propagation_and_error_inclusion(client):
     assert err_resp.json()["error"]["request_id"] == "err-trace-9999"
 
 
+def test_chat_completions_rag_live_token_streaming(client, monkeypatch):
+    """When stream=True and RAG_STREAMING_ENABLED=True, gateway proxies live tokens from RAGClient."""
+    from unittest.mock import AsyncMock
+    from slm_gateway.router import RoutingResult
+    import slm_gateway.main as main_mod
+
+    class RagMockRouter:
+        def is_ready(self):
+            return True
+
+        def classify(self, query: str):
+            return RoutingResult(
+                intent="rag",
+                confidence=0.95,
+                route="rag_service",
+                latency_ms=1.0,
+                scores_by_intent={"general": 0.1, "technical": 0.1, "rag": 0.95},
+                fallback_applied=False,
+            )
+
+    monkeypatch.setattr(main_mod, "router_instance", RagMockRouter())
+    app.state.router = RagMockRouter()
+
+    mock_rag_client = AsyncMock()
+    mock_rag_client.has_indexed_documents = AsyncMock(return_value=(True, None))
+
+    async def mock_stream_answer(query, strategy=None, retrieve_k=20, final_k=3, request_id=None):
+        yield {"x_sources": [{"source": "manual.pdf", "page": 1, "text": "sample"}]}
+        yield {"choices": [{"delta": {"content": "Live "}}]}
+        yield {"choices": [{"delta": {"content": "RAG token streaming."}}]}
+        yield {"done": True}
+
+    mock_rag_client.stream_answer = mock_stream_answer
+    monkeypatch.setattr(main_mod, "rag_client_instance", mock_rag_client)
+    app.state.rag_client = mock_rag_client
+    monkeypatch.setattr(main_mod.settings, "RAG_STREAMING_ENABLED", True)
+
+    payload = {
+        "messages": [{"role": "user", "content": "What does the manual state?"}],
+        "stream": True,
+    }
+
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers["content-type"]
+    assert "Live " in resp.text
+    assert "RAG token streaming." in resp.text
+    assert "[DONE]" in resp.text
+
+
+
 
 
 

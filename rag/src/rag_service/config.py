@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     GATEWAY_MODEL: str = "microsoft/Phi-3-mini-4k-instruct"
     GATEWAY_TIMEOUT: float = 180.0
 
+    # Grounded generation quality guards
+    RAG_MAX_CONTEXT_TOKENS: int = 3072         # Token-budget guard for Phi-3 4k context window
+    RERANKER_REFUSAL_THRESHOLD: float = 0.0    # If top chunk reranker score < threshold, refuse without calling LLM
+
     # OCR configuration
     TESSERACT_CMD: Optional[str] = None
 

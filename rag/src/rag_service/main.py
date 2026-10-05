@@ -1,6 +1,7 @@
 """RAG Service — Document Ingestion, Chunking, Retrieval, and Re-ranking API."""
 
 from contextlib import asynccontextmanager
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Optional
 import uuid
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .chunking import chunk_document
 from .config import settings
@@ -19,7 +20,7 @@ from .pii import redact_ingest_text
 from .rate_limiter import InMemoryRateLimiter
 from .reranker import Reranker, get_reranker
 from .retriever import Retriever, get_retriever
-from .generation import generate_grounded_answer
+from .generation import generate_grounded_answer, stream_grounded_answer
 from .schemas import (
     AnswerResponse,
     DeleteDocumentResponse,
@@ -177,10 +178,10 @@ async def upload_document(
         )
 
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".docx"):
+    if ext not in (".pdf", ".docx", ".txt", ".md"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file format '{ext}'. Only .pdf and .docx files are supported.",
+            detail=f"Unsupported file format '{ext}'. Only .pdf, .docx, .txt, and .md files are supported.",
         )
 
     # Parse requested strategies
@@ -201,8 +202,18 @@ async def upload_document(
         content = await file.read()
         if len(content) > settings.MAX_UPLOAD_SIZE_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"Uploaded file size ({len(content)} bytes) exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_BYTES} bytes.",
+            )
+
+        # Content-hash deduplication
+        content_hash = hashlib.sha256(content).hexdigest()
+        chroma_store = store or get_chroma_store(settings)
+        existing = chroma_store.find_document_by_hash(content_hash)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Document with identical content already indexed (doc_id: '{existing['doc_id']}', filename: '{existing['source']}').",
             )
 
         with open(temp_file, "wb") as f:
@@ -235,7 +246,6 @@ async def upload_document(
 
         # Apply chunking strategies
         emb_model = embedding_model or get_embedding_model(settings)
-        chroma_store = store or get_chroma_store(settings)
 
         chunked_by_strategy = chunk_document(
             pages=pages,
@@ -258,6 +268,7 @@ async def upload_document(
                     chunks=chunks,
                     embeddings=embeddings,
                     doc_id=doc_id,
+                    content_hash=content_hash,
                 )
                 chunk_counts[strat] = len(chunks)
                 total_chunks += len(chunks)
@@ -391,6 +402,19 @@ async def answer_question(request: QueryRequest, raw_request: Request):
     )
 
     req_id = getattr(raw_request.state, "request_id", None)
+
+    if request.stream:
+        return StreamingResponse(
+            stream_grounded_answer(
+                query=request.query,
+                chunks=results,
+                config=settings,
+                request_id=req_id,
+            ),
+            media_type="text/event-stream",
+            headers={"X-Request-ID": req_id} if req_id else {},
+        )
+
     call_kwargs = {}
     import inspect
     sig = inspect.signature(generate_grounded_answer)

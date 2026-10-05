@@ -1011,7 +1011,7 @@
                   document.getElementById('metric-route').innerText = route;
                   document.getElementById('metric-intent').innerText = parsed.x_routing.intent || 'general';
                   if (route === 'rag_service') {
-                    if (ttftLabel) ttftLabel.innerText = 'Latency (answer replayed)';
+                    if (ttftLabel) ttftLabel.innerText = 'TTFT (RAG streaming)';
                   } else {
                     if (ttftLabel) ttftLabel.innerText = 'TTFT';
                   }
@@ -1050,9 +1050,9 @@
             document.getElementById('metric-route').innerText = route;
             document.getElementById('metric-intent').innerText = res.x_routing.intent || 'general';
             if (route === 'rag_service') {
-              if (ttftLabel) ttftLabel.innerText = 'Latency (answer replayed)';
+              if (ttftLabel) ttftLabel.innerText = 'Latency (RAG answer)';
             } else {
-              if (ttftLabel) ttftLabel.innerText = 'TTFT';
+              if (ttftLabel) ttftLabel.innerText = 'Latency';
             }
           }
           if (res.x_pii) {
@@ -1253,8 +1253,8 @@
 
     function setIngestFile(file) {
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      if (!['.pdf', '.docx'].includes(ext)) {
-        alert('Unsupported file format. Please upload a .pdf or .docx document.');
+      if (!['.pdf', '.docx', '.txt', '.md'].includes(ext)) {
+        alert('Unsupported file format. Please upload a .pdf, .docx, .txt, or .md document.');
         return;
       }
       selectedIngestFile = file;

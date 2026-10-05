@@ -149,12 +149,38 @@ def test_docx_parser_extracts_headings_and_tables(tiny_docx_file: Path):
 
 
 def test_parse_document_dispatcher_rejects_unsupported_extensions(tmp_path: Path):
-    """parse_document must reject non-pdf/docx extensions with ValueError."""
-    txt_file = tmp_path / "notes.txt"
-    txt_file.write_text("Plain text notes.")
+    """parse_document must reject unsupported extensions like .csv with ValueError."""
+    csv_file = tmp_path / "data.csv"
+    csv_file.write_text("col1,col2\nval1,val2")
     with pytest.raises(ValueError) as excinfo:
-        parse_document(txt_file)
+        parse_document(csv_file)
     assert "Unsupported file format" in str(excinfo.value)
+
+
+def test_parse_document_txt_and_md_formats(tmp_path: Path):
+    """parse_document must parse .txt and .md files into page tuples."""
+    # 1. Plain text file
+    txt_file = tmp_path / "guide.txt"
+    txt_file.write_text("This is an operations runbook for incident response.")
+    pages_txt = parse_document(txt_file)
+    assert len(pages_txt) == 1
+    assert pages_txt[0][0] == 1
+    assert "incident response" in pages_txt[0][1]
+
+    # 2. Markdown file
+    md_file = tmp_path / "readme.md"
+    md_file.write_text("# Project Architecture\n\nThe gateway manages Presidio PII and BGE routing.")
+    pages_md = parse_document(md_file)
+    assert len(pages_md) == 1
+    assert "Project Architecture" in pages_md[0][1]
+
+    # 3. Empty text file raises ValueError
+    empty_txt = tmp_path / "empty.txt"
+    empty_txt.write_text("   \n\t  ")
+    with pytest.raises(ValueError) as excinfo:
+        parse_document(empty_txt)
+    assert "No extractable text found" in str(excinfo.value)
+
 
 
 def test_pdf_parser_table_structure_and_chunking(tmp_path: Path):

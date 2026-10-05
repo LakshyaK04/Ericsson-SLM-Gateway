@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     RAG_API_KEY: Optional[str] = None        # Optional Bearer token when authenticating to RAG service
     RAG_TIMEOUT_SECONDS: float = 180.0
     RAG_DEFAULT_STRATEGY: str = "structure"
+    RAG_STREAMING_ENABLED: bool = True       # True end-to-end SSE token streaming from RAG service
 
 
 # Global settings singleton

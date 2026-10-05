@@ -55,6 +55,7 @@ class ChromaStore:
         chunks: List[Chunk],
         embeddings: List[List[float]],
         doc_id: str,
+        content_hash: Optional[str] = None,
     ) -> int:
         """Add chunks and embeddings to the collection for the specified strategy."""
         if strategy not in self.collections:
@@ -73,6 +74,7 @@ class ChromaStore:
                 "page": int(c.page),
                 "chunk_id": c.chunk_id,
                 "strategy": strategy,
+                "content_hash": content_hash or "",
             }
             for c in chunks
         ]
@@ -84,6 +86,26 @@ class ChromaStore:
             metadatas=metadatas,
         )
         return len(chunks)
+
+    def find_document_by_hash(self, content_hash: str) -> Optional[Dict[str, Any]]:
+        """Look up if a document with this SHA-256 content hash already exists.
+
+        Returns:
+            Dict with doc_id and source if found, else None.
+        """
+        if not content_hash:
+            return None
+        for col in self.collections.values():
+            if col.count() == 0:
+                continue
+            res = col.get(where={"content_hash": content_hash}, limit=1, include=["metadatas"])
+            if res and res["metadatas"] and len(res["metadatas"]) > 0:
+                meta = res["metadatas"][0]
+                return {
+                    "doc_id": meta.get("doc_id", ""),
+                    "source": meta.get("source", ""),
+                }
+        return None
 
     def query(
         self,

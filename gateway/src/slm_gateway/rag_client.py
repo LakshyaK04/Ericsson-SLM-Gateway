@@ -4,8 +4,9 @@ Handles document presence checks, answer requests, and graceful failure fallback
 (service down, empty index, connection timeout) per Section 5.3.
 """
 
+import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import httpx
 
 from .config import Settings, settings
@@ -114,3 +115,56 @@ class RAGClient:
         except Exception as e:
             logger.warning("Unexpected error during RAG /answer request: %s", str(e))
             return None, f"rag_exception_{type(e).__name__}"
+
+    async def stream_answer(
+        self,
+        query: str,
+        strategy: Optional[str] = None,
+        retrieve_k: int = 20,
+        final_k: int = 3,
+        request_id: Optional[str] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream answer tokens and metadata from the RAG service via SSE.
+
+        Yields parsed dictionaries from each SSE data payload.
+        """
+        endpoint = f"{self.base_url}/answer"
+        payload = {
+            "query": query,
+            "strategy": strategy or self.config.RAG_DEFAULT_STRATEGY,
+            "retrieve_k": retrieve_k,
+            "final_k": final_k,
+            "use_reranker": True,
+            "stream": True,
+        }
+        headers = self._get_headers(request_id)
+
+        http_cli = self._external_client or httpx.AsyncClient()
+        close_cli = self._external_client is None
+
+        try:
+            async with http_cli.stream("POST", endpoint, json=payload, headers=headers, timeout=self.timeout) as resp:
+                if resp.status_code != 200:
+                    logger.warning("RAG streaming /answer returned status %d", resp.status_code)
+                    yield {"error": f"rag_status_{resp.status_code}"}
+                    return
+
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data_part = line[6:].strip()
+                        if data_part == "[DONE]":
+                            yield {"done": True}
+                            break
+                        try:
+                            yield json.loads(data_part)
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.warning("Error streaming from RAG service: %s", str(e))
+            yield {"error": str(e)}
+        finally:
+            if close_cli:
+                await http_cli.aclose()
+

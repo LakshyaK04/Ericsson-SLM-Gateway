@@ -47,6 +47,7 @@ class QueryRequest(BaseModel):
         description="Retrieval mode: 'dense' (BGE vector search), 'sparse' (BM25 search), or 'hybrid' (BM25 + Dense RRF fusion).",
     )
     rrf_k: int = Field(default=60, ge=1, le=1000, description="Reciprocal Rank Fusion smoothing parameter.")
+    stream: bool = Field(default=False, description="Whether to stream answer tokens as Server-Sent Events.")
 
 
 class QueryResultItem(BaseModel):

@@ -259,3 +259,72 @@ def test_ingestion_pii_redaction(client, monkeypatch, tmp_path: Path):
     finally:
         client.delete(f"/documents/{doc_id}")
 
+
+def test_content_hash_deduplication(client, sample_pdf: Path):
+    """Uploading the same document twice returns HTTP 409 Conflict with clear detail."""
+    # First upload succeeds
+    with open(sample_pdf, "rb") as f:
+        resp1 = client.post(
+            "/documents",
+            files={"file": ("telecom_overview.pdf", f, "application/pdf")},
+            data={"strategies": "structure"},
+        )
+    assert resp1.status_code == 200
+    doc_id = resp1.json()["doc_id"]
+
+    try:
+        # Second upload with identical content returns 409
+        with open(sample_pdf, "rb") as f:
+            resp2 = client.post(
+                "/documents",
+                files={"file": ("telecom_overview.pdf", f, "application/pdf")},
+                data={"strategies": "structure"},
+            )
+        assert resp2.status_code == 409
+        assert "Document with identical content already indexed" in resp2.json()["detail"]
+        assert doc_id in resp2.json()["detail"]
+    finally:
+        client.delete(f"/documents/{doc_id}")
+
+
+def test_txt_and_md_ingestion_lifecycle(client, tmp_path: Path):
+    """Verify .txt and .md files can be uploaded, indexed, and retrieved."""
+    # 1. Upload .txt file
+    txt_path = tmp_path / "cloud_native.txt"
+    txt_path.write_text("Cloud Native Infrastructure: Kubernetes coordinates container deployment across edge nodes.")
+    with open(txt_path, "rb") as f:
+        resp_txt = client.post(
+            "/documents",
+            files={"file": ("cloud_native.txt", f, "text/plain")},
+            data={"strategies": "structure"},
+        )
+    assert resp_txt.status_code == 200
+    txt_doc_id = resp_txt.json()["doc_id"]
+
+    # 2. Upload .md file
+    md_path = tmp_path / "observability.md"
+    md_path.write_text("# Observability Guide\nPrometheus scrapes OpenTelemetry metrics every 15 seconds.")
+    with open(md_path, "rb") as f:
+        resp_md = client.post(
+            "/documents",
+            files={"file": ("observability.md", f, "text/markdown")},
+            data={"strategies": "structure"},
+        )
+    assert resp_md.status_code == 200
+    md_doc_id = resp_md.json()["doc_id"]
+
+    try:
+        # Query for txt content
+        q1 = client.post("/query", json={"query": "Kubernetes container deployment", "strategy": "structure"})
+        assert q1.status_code == 200
+        assert any("Kubernetes" in r["text"] for r in q1.json()["results"])
+
+        # Query for md content
+        q2 = client.post("/query", json={"query": "Prometheus metric scraping interval", "strategy": "structure"})
+        assert q2.status_code == 200
+        assert any("Prometheus" in r["text"] for r in q2.json()["results"])
+    finally:
+        client.delete(f"/documents/{txt_doc_id}")
+        client.delete(f"/documents/{md_doc_id}")
+
+
