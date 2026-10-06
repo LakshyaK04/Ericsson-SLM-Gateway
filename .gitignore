@@ -18,8 +18,10 @@ env/
 .vscode/
 .idea/
 
-# Testing / coverage
+# Testing / coverage / linter
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
@@ -57,4 +59,5 @@ notes_private/
 
 # Raw benchmark datasets
 eval/datasets/*_raw.json
+eval/datasets/squad_dev_v2_raw.json
 

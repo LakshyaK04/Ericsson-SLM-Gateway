@@ -9,10 +9,10 @@ The **RAG Service** is a decoupled microservice providing document ingestion, mu
 - **Document Parsing**: High-fidelity text extraction from PDF (PyMuPDF) and DOCX (`python-docx`) preserving page markers, headings, and paragraph boundaries. Digital text PDFs are parsed directly. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs are rejected with HTTP 400.
 - **Selectable Chunking**: Supports 3 distinct segmentation strategies:
   - `character`: Fixed-size sliding window (500 chars, 50 overlap) with backward whitespace snapping.
-  - `structure`: Heading-aware hierarchy merging paragraphs up to 1000 chars. **Achieved 100% Hit@1 in empirical evaluation.**
+  - `structure`: Heading-aware hierarchy merging paragraphs up to 1000 chars. Achieved 94.44% Hit@1 (100% with re-ranker) in empirical evaluation on 36 questions.
   - `semantic`: Dynamic boundary detection based on sentence embedding cosine similarity drops.
 - **Persistent Vector Store**: ChromaDB client maintaining 3 isolated collections (`chunks_character`, `chunks_structure`, `chunks_semantic`) to prevent cross-strategy index skew.
-- **Two-Stage Retrieval**: Dense vector search (top-20) via `BAAI/bge-small-en-v1.5`, followed by deep cross-encoder re-ranking (top-3) via `BAAI/bge-reranker-base`.
+- **Hybrid Retrieval & Optional Re-Ranking**: Hybrid retrieval combining BM25 sparse keyword search and BGE dense vector search via Reciprocal Rank Fusion (RRF, $k=60$), with optional cross-encoder re-ranking via `BAAI/bge-reranker-base`.
 - **Grounded Answer Synthesis**: Assembles structured prompt with numbered context brackets (`[1]`, `[2]`) and calls the Gateway's `/v1/chat/completions` endpoint passing `X-Bypass-Router: true`.
 
 ---
@@ -26,9 +26,9 @@ graph TD
     Chunkers --> Embedder[BGE-small Embedding Model]
     Embedder --> Chroma[(ChromaDB Collections)]
     
-    Query[POST /query or /answer] --> Retriever[Dense Vector Search: Top 20]
+    Query[POST /query or /answer] --> Retriever[Hybrid Retrieval: BM25 + Dense RRF]
     Chroma --> Retriever
-    Retriever --> Reranker[BGE-Reranker Cross-Encoder: Top 3]
+    Retriever --> Reranker[Optional Cross-Encoder Re-Ranking]
     Reranker --> Formatter[Context Formatter: [1], [2], [3]]
     Formatter --> GatewayClient[HTTP Client: X-Bypass-Router: true]
     GatewayClient --> Gateway[SLM Gateway :8000]
@@ -43,7 +43,7 @@ graph TD
 
 ```bash
 # Navigate to repo root and start RAG service
-uv run uvicorn rag_service.main:app --host 0.0.0.0 --port 8001
+uv run --project rag uvicorn rag_service.main:app --host 0.0.0.0 --port 8001
 ```
 
 Verify service liveness:

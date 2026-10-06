@@ -1,21 +1,21 @@
-# Grounded Answer Quality, Faithfulness & Citation Evaluation Report
+# Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)
 
 - **Evaluation Run Date:** 2026-10-05 23:44:59
-- **Evaluated Pipeline:** Two-stage RAG generation (`SYSTEM_PROMPT` with numbered block citation format)
+- **Evaluated Artifact:** Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)
 - **Evaluation Methodology:** Rule-based citation extraction + factual token containment verification + refusal assertion analysis
-- **Sample Size:** 25 test cases (15 fully grounded + 5 hallucinated adversarial + 5 insufficient context refusals)
+- **Sample Size:** 25 hand-written test cases (15 grounded + 5 adversarial hallucination probes + 5 insufficient context refusals)
 
 ---
 
 ## 1. Quantitative Performance Matrix
 
-| Evaluation Dimension | Metric | Measured Value | Standard / Target | Description |
-|:---|:---|:---:|:---:|:---|
-| **Citation Compliance** | Citation Presence Rate | **100.0%** | $\ge 95\%$ | Percentage of non-refusal answers citing context blocks via `[N]` |
-| **Citation Accuracy** | Citation Precision | **100.0%** | $100\%$ | Percentage of cited block indices that map to valid retrieved chunks |
-| **Factual Groundedness** | Mean Grounding Ratio | **69.48%** | $\ge 85\%$ | Average percentage of factual/alphanumeric tokens corroborated by source context |
-| **Hallucination Detection** | Detection Sensitivity | **100.0%** | $100\%$ | Ability to flag answers containing fabricated entities or numbers absent from context |
-| **Refusal Integrity** | Out-of-Domain Refusal Rate | **100.0%** | $100\%$ | Accurate emission of standard refusal string when context is insufficient |
+| Evaluation Dimension | Metric | Measured Value | Description |
+|:---|:---|:---:|:---|
+| **Citation Compliance** | Citation Presence Rate | **100.0%** | Percentage of non-refusal answers citing context blocks via `[N]` |
+| **Citation Accuracy** | Citation Precision | **100.0%** | Percentage of cited block indices that map to valid retrieved chunks |
+| **Factual Groundedness** | Mean Grounding Ratio | **69.48%** | Average percentage of factual/alphanumeric tokens corroborated by source context |
+| **Hallucination Detection** | Detection Sensitivity | **100.0%** | Ability of rule checker to flag answers containing fabricated entities or numbers absent from context |
+| **Refusal Integrity** | Out-of-Domain Refusal Rate | **100.0%** | Correct recognition of standard refusal string when context is insufficient |
 
 ---
 
@@ -67,6 +67,6 @@
 
 ## 3. Explicit Methodological Limitations & Honest Disclosure
 
-1. **Lexical / Entity Overlap vs. Deep NLI Entailment:** This rule-based evaluator computes token and named entity overlap between the generated answer and the cited context blocks. While this reliably catches hallucinated numbers, dates, and proper nouns (e.g. port numbers, false authors, fabricated metrics), it does not detect subtler semantic contradictions (such as inverted logic or false causal attributions) that an NLI cross-encoder model would catch.
-2. **Citation Formatting Drift:** While strict system prompt instructions enforce `[1]`, `[2]` bracketed notation, conversational SLMs may occasionally use parenthetical `(Block 1)` or combined `[1, 2]` formatting. The extraction regex accommodates standard variants, but format compliance should be monitored over continuous production queries.
-3. **Corpus Scope:** The test set evaluates 25 representative scenarios across telecom, distributed systems, and historical topics. Enterprise deployments should integrate this evaluation into automated CI telemetry across larger domain-specific datasets.
+1. **Unit Evaluation on Hand-Written Data, Not Live Generation**: This evaluation runs the rule-based verification logic against 25 curated hand-written test cases. It is not an automated end-to-end evaluation of Phi-3 Mini's generation output under live inference.
+2. **Lexical / Entity Overlap vs. Deep NLI Entailment**: This rule-based evaluator computes token and named entity overlap between the answer and cited context blocks. While this reliably catches fabricated numbers, dates, and proper nouns (e.g. port numbers, false authors, fabricated metrics), it does not detect subtler semantic contradictions (such as inverted logic or false causal attributions) that an NLI cross-encoder model would catch.
+3. **Citation Formatting Drift**: While strict system prompt instructions enforce `[1]`, `[2]` bracketed notation, conversational models may occasionally use alternative formats like parenthetical `(Block 1)` or combined `[1, 2]`.

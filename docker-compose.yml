@@ -20,6 +20,7 @@ services:
       - DEFAULT_STRATEGY=structure
       - RETRIEVE_K=20
       - FINAL_K=3
+      - GATEWAY_TIMEOUT=${GATEWAY_TIMEOUT:-180.0}
     volumes:
       - chroma-data:/app/data/chroma
       - hf-cache:/home/appuser/.cache/huggingface
@@ -52,7 +53,8 @@ services:
       - ROUTER_THRESHOLD=${ROUTER_THRESHOLD:-0.55}
       - PII_FAIL_MODE=${PII_FAIL_MODE:-closed}
       - RAG_SERVICE_URL=http://rag:8001
-      - RAG_TIMEOUT_SECONDS=30.0
+      - RAG_TIMEOUT_SECONDS=${RAG_TIMEOUT_SECONDS:-180.0}
+      - RAG_USE_RERANKER=${RAG_USE_RERANKER:-false}
     volumes:
       - hf-cache:/home/appuser/.cache/huggingface
     networks:

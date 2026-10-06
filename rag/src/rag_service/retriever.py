@@ -68,8 +68,8 @@ class Retriever:
         WHY: Dense bi-encoder search (BGE-small) excels at conceptual semantic similarity,
         while sparse lexical search (Okapi BM25) excels at precise keyword, acronym, and
         identifier matching (e.g. EMP-12345, error codes, telecom standards). Fusing both
-        via Reciprocal Rank Fusion (RRF) before the neural cross-encoder yields state-of-the-art
-        retrieval robustness.
+        via Reciprocal Rank Fusion (RRF) before the neural cross-encoder improves
+        candidate retrieval across both keyword and conceptual queries.
 
         Args:
             query: User search query.

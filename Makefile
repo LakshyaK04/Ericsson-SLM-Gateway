@@ -10,8 +10,9 @@ help:
 	@echo "  make format             Auto-format codebase with ruff"
 	@echo "  make eval               Run baseline benchmark suites"
 	@echo "  make eval-squad         Run empirical SQuAD retrieval benchmark (8 configs)"
-	@echo "  make eval-faithfulness  Run RAG answer quality & faithfulness evaluation"
+	@echo "  make eval-faithfulness  Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)"
 	@echo "  make clean              Remove build artifacts, caches, and pycache"
+
 
 up:
 	docker compose up -d

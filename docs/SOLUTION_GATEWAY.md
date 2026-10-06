@@ -12,7 +12,7 @@ The **SLM Gateway** acts as the secure reverse proxy and ingestion gateway for l
 - **OpenAI Compatibility**: Drop-in replacement for OpenAI SDKs and tools (`chatcmpl-...` response envelopes, token usage tracking, and SSE streaming).
 - **In-Process Model Serving**: Serves `microsoft/Phi-3-mini-4k-instruct` in 4-bit NF4 quantization via HuggingFace Transformers and `bitsandbytes`.
 - **Fail-Closed PII Masking**: Identifies and masks personal identifiers (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IP_ADDRESS`), custom enterprise IDs (`EMPLOYEE_ID`), and project codenames with typed placeholders.
-- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~12.8ms using `BAAI/bge-small-en-v1.5` embeddings.
+- **Semantic Intent Routing**: Classifies queries across 3 operational intents (`general`, `technical`, `rag`) in ~64.3ms (CPU mean) using `BAAI/bge-small-en-v1.5` embeddings.
 - **RAG Delegation**: Orchestrates grounded retrieval-augmented queries to the RAG microservice with automatic loop prevention (`X-Bypass-Router`) and fallback handling.
 
 ---
@@ -124,7 +124,7 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 | **`rag`** | 16 | 93.8% | 93.8% | 93.8% |
 | **Overall** | **48** | **93.75% Accuracy (45/48)** | — | — |
 
-- **Mean Router Latency**: `12.76 ms` (P50: `12.15 ms`, P95: `16.48 ms`) on CPU
+- **Mean Router Latency**: `64.28 ms` (P50: `55.59 ms`, P95: `106.18 ms`) on CPU
 
 ---
 
@@ -132,8 +132,8 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 
 ### 5.1 `hf_local` (Default In-Process Backend)
 - **Model**: `microsoft/Phi-3-mini-4k-instruct`.
-- **Quantization**: 4-bit NormalFloat (NF4) via `bitsandbytes` with double quantization. Reduces GPU VRAM footprint from ~7.6GB (FP16) to ~2.6GB.
-- **Concurrency Isolation**: PyTorch generation runs behind an `asyncio.Semaphore(1)` to ensure single-device serial execution without thread collisions or CUDA memory corruption.
+- **Quantization**: 4-bit NormalFloat (NF4) via `bitsandbytes` with double quantization to minimize GPU memory footprint.
+- **Concurrency Isolation**: PyTorch generation runs behind an `asyncio.Semaphore(1)` providing single-device serial execution without thread collisions or CUDA memory corruption.
 - **Context Management**: Context window constrained to 4096 tokens. Oldest conversational turns are truncated gracefully while preserving system instructions.
 
 ### 5.2 `openai_compatible` (Flexible Proxy Backend)

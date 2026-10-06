@@ -54,10 +54,10 @@ frames_data = [
         "badge": "ROUTER",
         "badge_color": accent_cyan,
         "lines": [
-            ("BGE Embeddings + Threshold Classifier (Latency: ~12.8ms):", accent_cyan),
+            ("BGE Embeddings + Threshold Classifier:", accent_cyan),
             ("", text_main),
             ("Query intent: Technical domain query with architectural context", text_muted),
-            ("Cosine similarity to reference vectors: 0.884", accent_amber),
+            ("Cosine similarity to reference vectors: matched", accent_amber),
             ("Routing Decision: [slm-local] (Phi-3 Mini 4K Instruct)", accent_green),
             ("", text_main),
             ("Cloud fallback bypassed -> On-device execution maintained", accent_green),
@@ -71,16 +71,16 @@ frames_data = [
             ("Query: 5G Core architecture network slicing", accent_amber),
             ("", text_main),
             (
-                "1. BM25 Lexical Search  : 5 keyword chunks retrieved (Rank 1: chunk_402)",
+                "1. BM25 Lexical Search  : Keyword chunks retrieved",
                 text_muted,
             ),
             (
-                "2. BGE Dense Vectors    : 5 semantic chunks retrieved (Rank 1: chunk_402)",
+                "2. BGE Dense Vectors    : Semantic chunks retrieved",
                 text_muted,
             ),
-            ("3. RRF Fusion (k=60)    : Composite RRF Score = 0.0328", accent_cyan),
+            ("3. RRF Fusion (k=60)    : Reciprocal Rank Fusion", accent_cyan),
             ("", text_main),
-            ("Context Grounding: 3 verified chunks injected into prompt", accent_green),
+            ("Context Grounding: Ranked chunks injected into prompt", accent_green),
         ],
     },
     {
@@ -93,8 +93,8 @@ frames_data = [
             ('"According to the 5G Core specification, network slicing allocates', text_main),
             (' dedicated User Plane Functions (UPF) to guarantee SLA throughput..."', text_main),
             ("", text_main),
-            ("Prometheus /metrics updated: requests_total +1, pii_entities_total +3", accent_cyan),
-            ("Total end-to-end latency: 412ms | Memory footprint: 4.8 GB VRAM", accent_green),
+            ("Prometheus /metrics updated: requests_total, pii_entities_total", accent_cyan),
+            ("Token generation completed with cited sources", accent_green),
         ],
     },
 ]
@@ -106,7 +106,9 @@ for data in frames_data:
 
     # Header bar
     draw.rectangle([(20, 20), (width - 20, 70)], fill=card_bg)
-    draw.text((40, 32), "LOCAL GENAI STACK — SECURE PRIVACY PIPELINE", fill=text_muted)
+    draw.text(
+        (40, 32), "LOCAL GENAI STACK — PRIVACY PIPELINE (illustrative animation)", fill=text_muted
+    )
     draw.rectangle([(width - 170, 30), (width - 40, 60)], fill=(45, 55, 72))
     draw.text((width - 155, 37), data["badge"], fill=data["badge_color"])
 

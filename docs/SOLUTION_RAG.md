@@ -102,19 +102,19 @@ To evaluate retrieval performance beyond small author-written sets, we benchmark
    - *Why?* Reading comprehension benchmarks like SQuAD contain questions with distinctive named entities (e.g. "Normans", "Herve", "Turing machines"). In inverted lexical indices, queries with high-IDF entities immediately match the target document without vector embedding overhead.
 3. **Why Cross-Encoder Re-Ranking Decreased Hit@1 on SQuAD:**
    - Adding `BAAI/bge-reranker-base` dropped Hit@1 from 86.00% to 74.00% while increasing mean latency from 107 ms to 617 ms.
-   - *Root Cause Analysis:* `bge-reranker-base` was trained primarily on web search pairs (MS MARCO) where queries are short search strings matched against varied documents. In dense Wikipedia article corpora, multiple adjacent paragraphs share the exact same topic and entities. The cross-encoder can assign higher semantic relevance to a topical but non-gold paragraph than the exact paragraph containing the specific answer span.
+   - *Hypothesis (Not Tested):* A possible reason is domain shift, as `bge-reranker-base` was trained primarily on web search pairs (MS MARCO). In dense Wikipedia article corpora where multiple adjacent paragraphs share the same topic and entities, cross-attention might assign higher semantic relevance to a topical neighboring paragraph than the specific paragraph containing the exact answer span. This hypothesis was not experimentally tested.
    - *Architectural Recommendation:* For latency-sensitive production workloads (<100ms) or corpora where exact keyword/entity matching is critical, pure **Hybrid RRF ($k=20$ or $k=60$)** is the recommended default.
 
-### 4.3 Answer Quality, Faithfulness & Citation Evaluation
-Evaluated via `eval/faithfulness_eval.py` across 25 representative scenarios (15 grounded queries, 5 hallucinated adversarial queries, and 5 out-of-domain unanswerable queries):
+### 4.3 Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)
+Evaluated via `eval/faithfulness_eval.py` across 25 hand-written test scenarios (15 grounded queries, 5 hallucinated adversarial queries, and 5 out-of-domain unanswerable queries) to verify the deterministic answer-quality checking functions:
 
-| Dimension | Metric | Observed Value | Standard | Assessment |
-|:---|:---|:---:|:---:|:---|
-| **Citation Compliance** | Citation Presence Rate | **100.0%** | $\ge 95\%$ | All grounded answers correctly cite bracketed context blocks `[N]`. |
-| **Citation Accuracy** | Citation Precision | **100.0%** | $100\%$ | All citations map to valid in-bounds retrieved context chunks. |
-| **Factual Grounding** | Mean Factual Grounding | **69.48%** | $\ge 65\%$ | Factual entities and terms in answers are grounded in reference text. |
-| **Hallucination Catch** | Detection Sensitivity | **100.0%** | $100\%$ | Rule-based evaluator flagged 100% of adversarial fabricated claims. |
-| **Refusal Integrity** | Unanswerable Refusal Rate | **100.0%** | $100\%$ | Emits exact refusal string on ungrounded/out-of-domain questions. |
+| Dimension | Metric | Observed Value | Description |
+|:---|:---|:---:|:---|
+| **Citation Compliance** | Citation Presence Rate | **100.0%** | Hand-written grounded answers correctly cite bracketed context blocks `[N]`. |
+| **Citation Accuracy** | Citation Precision | **100.0%** | Hand-written citations map to valid in-bounds retrieved context chunks. |
+| **Factual Grounding** | Mean Factual Grounding | **69.48%** | Factual tokens in hand-written answers corroborated by reference text. |
+| **Hallucination Catch** | Detection Sensitivity | **100.0%** | Rule-based evaluator flagged hand-written adversarial fabricated claims. |
+| **Refusal Integrity** | Unanswerable Refusal Rate | **100.0%** | Correct handling of standard refusal string on hand-written ungrounded queries. |
 
 ### 4.4 Synthetic Smoke Benchmark (Historical Baseline)
 Evaluated on a small synthetic benchmark (3 PDFs / 5 pages from `scripts/create_eval_docs.py` and 36 questions):
@@ -126,12 +126,14 @@ Evaluated via `eval/chunking_eval.py` comparing **Dense-Only** vs. **Two-Stage R
 
 | Strategy | Re-ranker | Total Chunks | Avg Length (chars) | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **`character`** | **Off** | 16 | 423.6 | 86.11% | 100.00% | 0.9213 | 16.0 |
-| **`character`** | **On** | 16 | 423.6 | 88.89% | 97.22% | 0.9306 | 1025.1 |
-| **`structure`** | **Off** | 10 | 623.6 | 94.44% | 100.00% | 0.9722 | 15.5 |
-| **`structure`** | **On** | **10** | **623.6** | **100.00%** | **100.00%** | **1.0000** | **1069.9** |
-| **`semantic`** | **Off** | 16 | 388.7 | 88.89% | 100.00% | 0.9352 | 15.9 |
-| **`semantic`** | **On** | 16 | 388.7 | **94.44%** | **97.22%** | **0.9583** | **1175.0** |
+| **`character`** | **Off** | 16 | 423.6 | 86.11% | 100.00% | 0.9213 | 11.5 |
+| **`character`** | **On** | 16 | 423.6 | 88.89% | 97.22% | 0.9306 | 214.7 |
+| **`structure`** | **Off** | 10 | 623.6 | 94.44% | 100.00% | 0.9722 | 94.0 |
+| **`structure`** | **On** | **10** | **623.6** | **100.00%** | **100.00%** | **1.0000** | **286.5** |
+| **`semantic`** | **Off** | 16 | 388.7 | 88.89% | 100.00% | 0.9352 | 82.8 |
+| **`semantic`** | **On** | 16 | 388.7 | **94.44%** | **97.22%** | **0.9583** | **284.2** |
+
+*Measured on CPU.*
 
 ---
 
@@ -171,5 +173,5 @@ X-Bypass-Router: true
 1. **Scanned & Image-Only PDFs**: Digital text PDFs are parsed directly via PyMuPDF. Scanned pages fall back to Tesseract OCR only when Tesseract is installed on the host (or in the Docker image); otherwise scanned PDFs with no extractable text are rejected with HTTP 400. OCR quality was tested only on synthetic test fixtures and sample slide PDFs with Tesseract 5.x on Windows (mocked in CI); real-world scan accuracy is not benchmarked.
 2. **Complex Multi-Column / Tabular Layouts**: Multi-column text flow and borderless tables may interleave text blocks when extracted sequentially, requiring table-aware parsers for strict row-column formatting.
 3. **Small Synthetic Evaluation Set**: The benchmark corpus consists of 3 PDFs totaling 5 pages and 36 questions generated via `scripts/create_eval_docs.py`. Real-world corpora are substantially larger and messier.
-4. **Re-Ranking Overhead on CPU**: Cross-encoder re-ranking adds ~1,000-1,160 ms inference latency per query on CPU.
+4. **Re-Ranking Overhead on CPU**: In empirical CPU evaluation, cross-encoder re-ranking added ~190-205 ms inference latency per query.
 5. **ChromaDB File-Locking on Windows**: Fast consecutive test runs on Windows can encounter file locks on ChromaDB's persistent storage; tests isolate storage per run to avoid conflicts.

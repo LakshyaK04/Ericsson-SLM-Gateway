@@ -8,10 +8,11 @@ Validates:
 5. Grounded prompt generation and context formatting.
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from slm_gateway.config import Settings
 from slm_gateway.main import app
 from slm_gateway.rag_client import RAGClient
 
@@ -192,3 +193,26 @@ def test_bypass_router_header_prevents_infinite_loop(client, monkeypatch):
     # Assert RAG client was NEVER called (no infinite loop)
     mock_rag_client.has_indexed_documents.assert_not_called()
     mock_rag_client.get_answer.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rag_client_respects_reranker_setting():
+    """Verify RAGClient respects RAG_USE_RERANKER config (default False)."""
+    cfg_default = Settings(RAG_USE_RERANKER=False)
+    mock_http = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"answer": "test", "sources": []}
+    mock_http.post = AsyncMock(return_value=mock_resp)
+
+    client = RAGClient(config=cfg_default, client=mock_http)
+    await client.get_answer("What is UPF?")
+    assert mock_http.post.called
+    payload = mock_http.post.call_args.kwargs["json"]
+    assert payload["use_reranker"] is False
+
+    cfg_enabled = Settings(RAG_USE_RERANKER=True)
+    client_enabled = RAGClient(config=cfg_enabled, client=mock_http)
+    await client_enabled.get_answer("What is UPF?")
+    payload_enabled = mock_http.post.call_args.kwargs["json"]
+    assert payload_enabled["use_reranker"] is True

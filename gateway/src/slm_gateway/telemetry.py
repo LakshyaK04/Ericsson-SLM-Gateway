@@ -1,4 +1,4 @@
-"""Lightweight, production-grade Prometheus metrics collector and exporter for SLM Gateway.
+"""Lightweight Prometheus metrics collector and exporter for SLM Gateway.
 
 Exports standard Prometheus / OpenMetrics plain-text format (0.0.4) on /metrics:
 - gateway_requests_total{intent, status}: Counter for API completions

@@ -1,6 +1,6 @@
 # Local GenAI Stack: SLM Gateway & Hybrid RAG Pipeline
 
-A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), ensuring on-device execution without cloud data egress.
+A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), enabling on-device execution without cloud data egress.
 
 ![Local GenAI Stack Demo](assets/demo.gif)
 *Illustrative animation of the request lifecycle.*
@@ -58,7 +58,7 @@ A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compati
 graph TD
     Client([User / Client]) --> Gateway[FastAPI Gateway :8000]
     Gateway --> PII[PII Redaction: Fail-Closed]
-    PII --> Router[Semantic Router: ~12.8ms]
+    PII --> Router[Semantic Router: ~64.3ms CPU]
     
     Router -->|Normal query: general / technical| LocalModel[Phi-3 Mini 4K Instruct]
     Router -->|RAG query| RAG[Hybrid RAG Pipeline :8001]
@@ -227,25 +227,23 @@ To benchmark retrieval performance beyond small synthetic suites, we evaluated *
 
 *Empirical Insights & Honest Tradeoffs*:
 - **BM25 vs. Dense**: BM25 achieved superior Hit@1 (86.00% vs 80.67%) and MRR (0.9060 vs 0.8643) at over 14x faster speed (7.07 ms vs 101.29 ms). SQuAD queries contain precise named entities and verbatim phrase spans where exact inverted index matching excels over dense vector approximation.
-- **Hybrid Fusion Value**: Hybrid RRF ($k=20$) achieved the highest overall retrieval quality (**99.33% Hit@10**, **0.9103 MRR**, **0.9309 nDCG@10**). By merging lexical exact matches with dense semantic neighborhoods, hybrid fusion eliminated 50% of the misses that occurred when relying on BM25 alone (misses dropped from 4/150 down to 1/150).
-- **Cross-Encoder Domain Shift**: Adding `bge-reranker-base` dropped Hit@1 to 74.00% and increased latency to 617.17 ms. `bge-reranker-base` was pre-trained primarily on MS MARCO web search. In dense multi-paragraph Wikipedia documents where adjacent passages discuss the same entities and context, cross-attention often scores topically relevant neighboring paragraphs higher than the specific paragraph containing the exact answer span.
+- **Hybrid Fusion Value**: Hybrid RRF ($k=20$) achieved the highest overall retrieval quality (**99.33% Hit@10**, **0.9103 MRR**, **0.9309 nDCG@10**). By merging lexical exact matches with dense semantic neighborhoods, misses went from 4/150 (BM25) to 1/150 (hybrid RRF $k=20$).
+- **Cross-Encoder Performance**: Adding `bge-reranker-base` lowered Hit@1 from 86.00% to 74.00% and increased latency to 617.17 ms. A possible reason is domain shift or cross-attention scoring topically relevant neighboring passages higher than the specific paragraph containing the answer span, though this hypothesis is not tested.
 
 ---
 
-### 3.2 Answer Quality, Faithfulness & Citation Evaluation
-Evaluated across 25 end-to-end RAG scenarios (15 fully grounded questions across telecom/tech domains, 5 adversarial hallucination probes, 5 out-of-domain insufficient context queries) using `eval/faithfulness_eval.py`:
+### 3.2 Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)
+Evaluated across 25 hand-written test scenarios (15 grounded question/answer pairs, 5 adversarial hallucination probes, 5 out-of-domain refusal queries) using `eval/faithfulness_eval.py` to verify the deterministic answer-quality checking functions:
 
-| Evaluation Dimension | Metric | Measured Value | Standard / Target | Description |
-|:---|:---|:---:|:---:|:---|
-| **Citation Compliance** | Citation Presence Rate | **100.0%** | $\ge 95\%$ | Percentage of non-refusal answers citing context blocks via `[N]` |
-| **Citation Accuracy** | Citation Precision | **100.0%** | $100\%$ | Percentage of cited block indices that map to valid retrieved chunks |
-| **Factual Groundedness** | Mean Grounding Ratio | **69.48%** | $\ge 85\%$ | Average percentage of factual/alphanumeric tokens corroborated by source context |
-| **Hallucination Detection** | Detection Sensitivity | **100.0%** | $100\%$ | Ability to flag answers containing fabricated entities or numbers absent from context |
-| **Refusal Integrity** | Out-of-Domain Refusal Rate | **100.0%** | $100\%$ | Accurate emission of standard refusal string when context is insufficient |
+| Evaluation Dimension | Metric | Measured Value | Description |
+|:---|:---|:---:|:---|
+| **Citation Compliance** | Citation Presence Rate | **100.0%** | Percentage of non-refusal hand-written answers citing context blocks via `[N]` |
+| **Citation Accuracy** | Citation Precision | **100.0%** | Percentage of cited block indices that map to valid retrieved chunks |
+| **Factual Groundedness** | Mean Grounding Ratio | **69.48%** | Average percentage of factual/alphanumeric tokens corroborated by source context |
+| **Hallucination Detection** | Detection Sensitivity | **100.0%** | Hand-written answers with fabricated entities flagged by token overlap |
+| **Refusal Integrity** | Out-of-Domain Refusal Rate | **100.0%** | Correct handling of standard refusal string when context is insufficient |
 
-- **Citation Precision (100.0%)**: All generated citations mapped strictly to valid retrieved block indices (`[1]`, `[2]`).
-- **Hallucination Catch Rate (100.0%)**: Adversarial assertions with fabricated port numbers, model parameters, and authorship were identified with an average token overlap score of under 29%, compared to ~85% for grounded answers.
-- **Refusal Honesty (100.0%)**: When context documents lacked information (e.g. quantum coherence times, 1994 World Cup, Black-Scholes formula), the model strictly emitted the fallback refusal message rather than confabulating.
+The checker logic correctly verified valid citation brackets on hand-written grounded examples, identified token divergence (<29% overlap) on hand-written adversarial examples, and recognized refusal strings on ungrounded queries. The measured factual grounding ratio on the 15 grounded examples was 69.48%.
 
 ---
 
@@ -259,7 +257,7 @@ Evaluated on 48 held-out synthetic queries with 0 training exemplar leakage (`ev
 | `rag` | 16 | 93.8% | 93.8% | 93.8% |
 | **Overall** | **48** | **93.75% Accuracy (45/48)** | — | — |
 
-*Operating threshold: `0.55`. Mean classification latency: `12.76 ms` on CPU.*
+*Operating threshold: `0.55`. Mean classification latency: `64.28 ms` on CPU.*
 
 ---
 
@@ -268,20 +266,22 @@ Evaluated across 36 ground-truth questions on 3 technical PDFs (`scripts/create_
 
 | Strategy | Re-ranker | Total Chunks | Avg Length | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `character` | Off | 16 | 423.6 ch | 86.11% | 100.00% | 0.9213 | 16.0 ms |
-| `character` | On | 16 | 423.6 ch | 88.89% | 97.22% | 0.9306 | 1025.1 ms |
-| `structure` | Off | 10 | 623.6 ch | 94.44% | 100.00% | 0.9722 | 15.5 ms |
-| **`structure`** | **On** | **10** | **623.6 ch** | **100.00%** | **100.00%** | **1.0000** | **1069.9 ms** |
-| `semantic` | Off | 16 | 388.7 ch | 88.89% | 100.00% | 0.9352 | 15.9 ms |
-| **`semantic`** | **On** | **16** | **388.7 ch** | **94.44%** | **97.22%** | **0.9583** | **1175.0 ms** |
+| `character` | Off | 16 | 423.6 ch | 86.11% | 100.00% | 0.9213 | 11.5 ms |
+| `character` | On | 16 | 423.6 ch | 88.89% | 97.22% | 0.9306 | 214.7 ms |
+| `structure` | Off | 10 | 623.6 ch | 94.44% | 100.00% | 0.9722 | 94.0 ms |
+| **`structure`** | **On** | **10** | **623.6 ch** | **100.00%** | **100.00%** | **1.0000** | **286.5 ms** |
+| `semantic` | Off | 16 | 388.7 ch | 88.89% | 100.00% | 0.9352 | 82.8 ms |
+| **`semantic`** | **On** | **16** | **388.7 ch** | **94.44%** | **97.22%** | **0.9583** | **284.2 ms** |
+
+*Measured on CPU (Intel Core).*
 
 ---
 
 ### 3.5 Findings and Honest Caveats
-- **Public vs. Synthetic Datasets**: SQuAD v2.0 (500 passages / 150 queries) provides realistic, unbiased retrieval evaluation. Chunking and router evaluations were performed on curated synthetic sets.
-- **Hybrid Retrieval Performance**: On SQuAD, Hybrid RRF proved superior to pure dense retrieval by +5.33 pp Hit@1 and +0.046 MRR, and reached 99.33% Hit@10 (beating BM25's 97.33%).
-- **Cross-Encoder Resource Cost**: Cross-encoder re-ranking adds 500-800 ms per query on consumer GPUs (and 1,000+ ms on CPU). It should only be used when latency budgets permit and on domains where fine-tuned cross-attention is calibrated.
-- **Hardware Context**: SQuAD retrieval and faithfulness benchmarks were executed with CUDA GPU acceleration (NVIDIA RTX 3050 6GB). Intent routing and baseline chunking runs were executed on CPU.
+- **Small and author-written evaluation sets**: Evaluation sets other than SQuAD are small and author-written (e.g. 36 questions across 3 synthetic PDFs for chunking, 24 queries for hybrid retrieval, 48 queries for routing, and 9 questions for the smoke test).
+- **BM25 strength and cross-encoder reduction on SQuAD**: On the SQuAD benchmark, BM25 alone was a strong baseline (86.00% Hit@1, 0.9060 MRR, 7.07 ms latency). Adding the `bge-reranker-base` cross-encoder lowered Hit@1 from 86.00% to 74.00% (and MRR from 0.9092 to 0.8242) while increasing latency to 617.17 ms.
+- **Nimbus smoke test failure modes**: On the Nimbus smoke test (fictional document, 9 questions), no configuration answered all questions in every mode. The default chat configuration (`structure`, `hybrid`, re-ranker off) achieved 88.89% Hit@3 (66.67% Hit@1, MRR 0.7593, 88.7 ms latency on CPU) and failed 1 of 9 questions: "How many days are alerts kept?" (expected `45`). With the re-ranker on, it achieved 88.89% Hit@3 (77.78% Hit@1, MRR 0.8333, 305.1 ms latency on CPU) and failed 1 of 9 questions: "What is the default retention period?" (expected `45`).
+- **Hardware Context**: SQuAD retrieval benchmarks were executed with CUDA GPU acceleration (NVIDIA RTX 3050 6GB Laptop GPU). Intent routing, chunking, hybrid, and smoke evaluations were executed on CPU.
 - **Document Parsing and OCR**: PyMuPDF handles digital text PDFs directly; scanned pages fall back to Tesseract OCR when available. Scanned documents without OCR engines are rejected with HTTP 400.
 
 ---

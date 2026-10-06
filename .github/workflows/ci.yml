@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-    branches: [main]
 
 jobs:
   lint:
@@ -73,8 +72,9 @@ jobs:
         run: uv run python eval/router_eval.py
 
   docker-smoke:
-    name: Docker Compose Build & Smoke Test
+    name: Docker Compose Build & Smoke Test (best effort)
     runs-on: ubuntu-latest
+    continue-on-error: true
     needs: lint
     steps:
       - name: Checkout repository

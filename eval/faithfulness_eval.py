@@ -1,19 +1,8 @@
 """
-Answer Quality, Faithfulness, and Citation Correctness Evaluation Pipeline.
+Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3).
 
-Evaluates RAG answer quality using rule-based citation verification, factual token grounding,
-and hallucination detection across a 25-query benchmark set:
-1. Citation Verification:
-   - Presence rate (% answers containing bracketed source citations [1], [2], etc.)
-   - Citation validity / precision (% citations referencing existing retrieved blocks)
-2. Factual Grounding & Hallucination Detection:
-   - Entity & factual token coverage in cited context
-   - Hallucinated entity detection (numbers, proper nouns, technical terms not in context)
-3. Refusal Integrity:
-   - Exact refusal verification on unanswerable/out-of-domain questions
-4. Methodological Limitations & Honest Disclosure:
-   - Lexical & entity overlap vs formal Natural Language Inference (NLI)
-   - Paraphrase and semantic variation limits
+Evaluates the answer-quality checker heuristics using rule-based citation verification, factual token grounding,
+and hallucination detection across 25 curated test cases (15 grounded, 5 adversarial hallucination probes, 5 refusals).
 """
 
 import logging
@@ -520,37 +509,37 @@ def run_faithfulness_evaluation():
 
     # Write Markdown Report
     with open(OUTPUT_REPORT, "w", encoding="utf-8") as f:
-        f.write("# Grounded Answer Quality, Faithfulness & Citation Evaluation Report\n\n")
+        f.write(
+            "# Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)\n\n"
+        )
         f.write(f"- **Evaluation Run Date:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(
-            "- **Evaluated Pipeline:** Two-stage RAG generation (`SYSTEM_PROMPT` with numbered block citation format)\n"
+            "- **Evaluated Artifact:** Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)\n"
         )
         f.write(
             "- **Evaluation Methodology:** Rule-based citation extraction + factual token containment verification + refusal assertion analysis\n"
         )
         f.write(
-            f"- **Sample Size:** {num_items} test cases (15 fully grounded + 5 hallucinated adversarial + 5 insufficient context refusals)\n\n"
+            f"- **Sample Size:** {num_items} hand-written test cases (15 grounded + 5 adversarial hallucination probes + 5 insufficient context refusals)\n\n"
         )
 
         f.write("---\n\n## 1. Quantitative Performance Matrix\n\n")
+        f.write("| Evaluation Dimension | Metric | Measured Value | Description |\n")
+        f.write("|:---|:---|:---:|:---|\n")
         f.write(
-            "| Evaluation Dimension | Metric | Measured Value | Standard / Target | Description |\n"
-        )
-        f.write("|:---|:---|:---:|:---:|:---|\n")
-        f.write(
-            f"| **Citation Compliance** | Citation Presence Rate | **{citation_presence_rate}%** | $\\ge 95\\%$ | Percentage of non-refusal answers citing context blocks via `[N]` |\n"
+            f"| **Citation Compliance** | Citation Presence Rate | **{citation_presence_rate}%** | Percentage of non-refusal answers citing context blocks via `[N]` |\n"
         )
         f.write(
-            f"| **Citation Accuracy** | Citation Precision | **{citation_precision}%** | $100\\%$ | Percentage of cited block indices that map to valid retrieved chunks |\n"
+            f"| **Citation Accuracy** | Citation Precision | **{citation_precision}%** | Percentage of cited block indices that map to valid retrieved chunks |\n"
         )
         f.write(
-            f"| **Factual Groundedness** | Mean Grounding Ratio | **{mean_grounding}%** | $\\ge 85\\%$ | Average percentage of factual/alphanumeric tokens corroborated by source context |\n"
+            f"| **Factual Groundedness** | Mean Grounding Ratio | **{mean_grounding}%** | Average percentage of factual/alphanumeric tokens corroborated by source context |\n"
         )
         f.write(
-            f"| **Hallucination Detection** | Detection Sensitivity | **{hallucination_detection_rate}%** | $100\\%$ | Ability to flag answers containing fabricated entities or numbers absent from context |\n"
+            f"| **Hallucination Detection** | Detection Sensitivity | **{hallucination_detection_rate}%** | Ability of rule checker to flag answers containing fabricated entities or numbers absent from context |\n"
         )
         f.write(
-            f"| **Refusal Integrity** | Out-of-Domain Refusal Rate | **{refusal_accuracy}%** | $100\\%$ | Accurate emission of standard refusal string when context is insufficient |\n\n"
+            f"| **Refusal Integrity** | Out-of-Domain Refusal Rate | **{refusal_accuracy}%** | Correct recognition of standard refusal string when context is insufficient |\n\n"
         )
 
         f.write("---\n\n## 2. Test Set Breakdown & Diagnostic Results\n\n")

@@ -182,12 +182,45 @@ def demo_chunking_comparison():
     print(
         f"+{'-' * 13}+{'-' * 11}+{'-' * 14}+{'-' * 12}+{'-' * 11}+{'-' * 11}+{'-' * 8}+{'-' * 14}+"
     )
-    print("""
-Observations:
-1. Re-ranking improved structure chunking (Hit@1: 94.44% -> 100.00%) and semantic chunking (Hit@1: 88.89% -> 94.44%).
-2. Re-ranking character chunking improved Hit@1 (+2.78 pp), but reduced Hit@3 (-2.78 pp).
-3. Re-ranking adds ~1,000-1,160 ms cross-encoder inference latency per query on CPU.
-""")
+    struct_off = next(
+        (r for r in rows if r["Strategy"] == "structure" and r["Reranker"] == "Off"), None
+    )
+    struct_on = next(
+        (r for r in rows if r["Strategy"] == "structure" and r["Reranker"] == "On"), None
+    )
+    sem_off = next(
+        (r for r in rows if r["Strategy"] == "semantic" and r["Reranker"] == "Off"), None
+    )
+    sem_on = next((r for r in rows if r["Strategy"] == "semantic" and r["Reranker"] == "On"), None)
+    char_off = next(
+        (r for r in rows if r["Strategy"] == "character" and r["Reranker"] == "Off"), None
+    )
+    char_on = next(
+        (r for r in rows if r["Strategy"] == "character" and r["Reranker"] == "On"), None
+    )
+
+    print("\nObservations (generated from CSV):")
+    if struct_off and struct_on:
+        print(
+            f"1. Structure chunking Hit@1: {float(struct_off['Hit@1 (%)']):.2f}% (Off) -> {float(struct_on['Hit@1 (%)']):.2f}% (On)."
+        )
+    if sem_off and sem_on:
+        print(
+            f"2. Semantic chunking Hit@1: {float(sem_off['Hit@1 (%)']):.2f}% (Off) -> {float(sem_on['Hit@1 (%)']):.2f}% (On)."
+        )
+    if char_off and char_on:
+        h1_diff = float(char_on["Hit@1 (%)"]) - float(char_off["Hit@1 (%)"])
+        h3_diff = float(char_on["Hit@3 (%)"]) - float(char_off["Hit@3 (%)"])
+        print(
+            f"3. Character chunking with re-ranker: Hit@1 change is {h1_diff:+.2f} pp, Hit@3 change is {h3_diff:+.2f} pp."
+        )
+    if struct_off and struct_on and char_off and char_on and sem_off and sem_on:
+        lat_struct = float(struct_on["Avg Latency (ms)"]) - float(struct_off["Avg Latency (ms)"])
+        lat_char = float(char_on["Avg Latency (ms)"]) - float(char_off["Avg Latency (ms)"])
+        lat_sem = float(sem_on["Avg Latency (ms)"]) - float(sem_off["Avg Latency (ms)"])
+        print(
+            f"4. Re-ranking added measured CPU latency: structure +{lat_struct:.1f} ms, character +{lat_char:.1f} ms, semantic +{lat_sem:.1f} ms."
+        )
 
 
 def main():

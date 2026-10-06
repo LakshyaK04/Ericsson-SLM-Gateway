@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     RAG_TIMEOUT_SECONDS: float = 180.0
     RAG_DEFAULT_STRATEGY: str = "structure"
     RAG_STREAMING_ENABLED: bool = True  # True end-to-end SSE token streaming from RAG service
+    RAG_USE_RERANKER: bool = False
 
 
 # Global settings singleton

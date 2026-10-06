@@ -58,7 +58,7 @@ graph TD
 | **FastAPI Gateway** (:8000) | Public API entry point, OpenAI schema compliance, PII redaction, intent routing. | FastAPI, Pydantic, Uvicorn |
 | **Model Serving** | In-process local inference in 4-bit NF4 with bounded queue. | HuggingFace Transformers, bitsandbytes |
 | **PII Redaction** | Strips personal and employee identifiers before inference (fail-closed mode). | Microsoft Presidio, spaCy `en_core_web_sm` |
-| **Semantic Router** | Classifies query intent without an expensive LLM call (~12ms). | BGE-small embeddings, cosine similarity |
+| **Semantic Router** | Classifies query intent without an expensive LLM call (~64ms CPU mean). | BGE-small embeddings, cosine similarity |
 | **Document Parsers** | Digital text & table extraction from PDF, DOCX, TXT, and Markdown files. | PyMuPDF, python-docx |
 | **Chunking Engine** | 3 independent strategies: Character (sliding window), Structure, Semantic. | Custom modular chunkers |
 | **Vector Storage** | Persistent local vector storage and collection management. | ChromaDB |
@@ -69,7 +69,7 @@ graph TD
 ## 4. Key Design Decisions & Architectural Rationale
 
 ### 4.1 Why Phi-3 Mini (3.8B)?
-- **Hardware Footprint**: Quantized to 4-bit NormalFloat (NF4) via bitsandbytes, the 3.8-billion parameter model consumes only **~2.8 GB VRAM**, running comfortably on consumer GPUs (e.g. NVIDIA RTX 3050 6GB) or fallback CPU inference while leaving memory for embedding and reranker models.
+- **Hardware Footprint**: Quantized to 4-bit NormalFloat (NF4) via bitsandbytes, the 3.8-billion parameter model runs locally on consumer GPUs (or fallback CPU inference) while leaving memory for embedding and reranker models.
 - **Reasoning Density**: Trained on heavily curated synthetic datasets and filtered web texts, Phi-3 Mini rivals or outperforms 7B–14B models on MMLU, GSM8K, and coding benchmarks while running at significantly higher tokens/second.
 - **Instruct Tuning**: Native support for instruction/chat templates (`<|user|>`, `<|assistant|>`, `<|system|>`) simplifies structured prompt injection.
 
@@ -82,8 +82,8 @@ graph TD
 - **Configurable Flexibility**: In `closed` mode, the service raises an exception during startup and refuses traffic. In `open` mode (enabled via `PII_FAIL_MODE=open`), the gateway logs a loud warning and continues serving.
 
 ### 4.4 Why an Embedding Router vs. an LLM-Based Router?
-- **Sub-15ms Latency vs. 500ms+ Generative Overhead**: Embedding a query with `BAAI/bge-small-en-v1.5` and computing cosine similarity against exemplar vectors takes **~12 ms on CPU** and **<3 ms on GPU**. In contrast, calling an LLM (even a small 3B model) to output a JSON classification takes 500–1,500 ms and consumes generation context tokens.
-- **Zero Hallucination**: Cosine similarity produces deterministic numerical scores, allowing strict threshold enforcement (e.g. falling back to `general` if similarity is under `0.55`).
+- **Low Latency vs. Generative Overhead**: Embedding a query with `BAAI/bge-small-en-v1.5` and computing cosine similarity against exemplar vectors takes **~64 ms on CPU** (mean). In contrast, calling an LLM to output a JSON classification takes 500–1,500 ms and consumes generation context tokens.
+- **Deterministic Thresholding**: Cosine similarity produces deterministic numerical scores, allowing strict threshold enforcement (e.g. falling back to `general` if similarity is under `0.55`).
 
 ---
 

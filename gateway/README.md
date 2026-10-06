@@ -9,7 +9,7 @@ The **SLM Gateway** is a lightweight API gateway and inference router that wraps
 - **OpenAI-Compatible `/v1/chat/completions`**: Integrates directly with the official `openai` Python SDK or any OpenAI-compatible client.
 - **In-Process Model Serving (`hf_local`)**: Loads `microsoft/Phi-3-mini-4k-instruct` in 4-bit NF4 quantization via `bitsandbytes`, guarded by an async semaphore for single-GPU stability.
 - **Client-Side PII Masking**: Microsoft Presidio analyzer with custom `EMPLOYEE_ID` recognizer and fail-closed privacy policy. Geographic names (`LOCATION`) and dates (`DATE_TIME`) are preserved to prevent query corruption.
-- **Semantic Intent Router**: Classifies queries across 3 intents (`general`, `technical`, `rag`) in ~12.8ms using `BAAI/bge-small-en-v1.5` embeddings.
+- **Semantic Intent Router**: Classifies queries across 3 intents (`general`, `technical`, `rag`) in ~64.3ms (CPU mean) using `BAAI/bge-small-en-v1.5` embeddings.
 - **Loop-Safe RAG Delegation**: Routes document questions to the RAG service and accepts generation callbacks safely using `X-Bypass-Router: true`.
 
 ---
@@ -37,7 +37,7 @@ graph TD
 
 ```bash
 # Navigate to repo root and start gateway
-uv run uvicorn slm_gateway.main:app --host 0.0.0.0 --port 8000
+uv run --project gateway uvicorn slm_gateway.main:app --host 0.0.0.0 --port 8000
 ```
 
 Verify service readiness:
@@ -75,7 +75,8 @@ Key settings can be configured via environment variables or a `.env` file:
 | `ROUTER_MODEL_NAME` | string | `BAAI/bge-small-en-v1.5` | Embedding model for semantic router |
 | `ROUTER_THRESHOLD` | float | `0.55` | Cosine similarity threshold for intent fallback |
 | `RAG_SERVICE_URL` | string | `http://localhost:8001` | RAG service base URL |
-| `RAG_TIMEOUT_SECONDS` | float | `30.0` | HTTP timeout when delegating to RAG service |
+| `RAG_TIMEOUT_SECONDS` | float | `180.0` | HTTP timeout when delegating to RAG service |
+| `RAG_USE_RERANKER` | bool | `false` | Enable cross-encoder re-ranking when querying RAG service |
 
 ---
 

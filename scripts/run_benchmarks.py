@@ -40,10 +40,10 @@ def parse_pii_report() -> dict:
     )
 
     return {
-        "total": total.group(1) if total else "33",
-        "recall": f"{recall.group(1)}%" if recall else "100.0%",
-        "fp": f"{fp.group(1)}%" if fp else "0.0%",
-        "latency": latency.group(1) if latency else "7.5 ms",
+        "total": total.group(1) if total else "N/A",
+        "recall": f"{recall.group(1)}%" if recall else "N/A",
+        "fp": f"{fp.group(1)}%" if fp else "N/A",
+        "latency": latency.group(1) if latency else "N/A",
     }
 
 
@@ -58,9 +58,9 @@ def parse_router_report() -> dict:
     threshold = re.search(r"Configured Threshold:\*\* `([\d\.]+)`", content)
 
     return {
-        "accuracy": f"{acc.group(1)}%" if acc else "93.75%",
-        "latency": latency.group(1) if latency else "12.76 ms",
-        "threshold": threshold.group(1) if threshold else "0.55",
+        "accuracy": f"{acc.group(1)}%" if acc else "N/A",
+        "latency": latency.group(1) if latency else "N/A",
+        "threshold": threshold.group(1) if threshold else "N/A",
     }
 
 
@@ -149,13 +149,13 @@ def print_scorecard():
     print("\n[2] SEMANTIC INTENT ROUTER (BAAI/bge-small-en-v1.5)")
     if router:
         print(
-            f"    * Accuracy:             {router.get('accuracy', '93.8%')} (45/48 correct on non-overlapping test set)"
+            f"    * Accuracy:             {router.get('accuracy', 'N/A')} (45/48 correct on non-overlapping test set)"
         )
         print(
-            f"    * Router Latency:       {router.get('latency', '13.34 ms')} (Pre-generation intent classification)"
+            f"    * Router Latency:       {router.get('latency', 'N/A')} (Pre-generation intent classification)"
         )
         print(
-            f"    * Operating Threshold:  {router.get('threshold', '0.55')} (Cosine similarity with fallback to general)"
+            f"    * Operating Threshold:  {router.get('threshold', 'N/A')} (Cosine similarity with fallback to general)"
         )
     else:
         print("    (No report found. Run: python scripts/run_benchmarks.py --suite router)")

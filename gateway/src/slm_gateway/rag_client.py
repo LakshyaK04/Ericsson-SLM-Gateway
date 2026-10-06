@@ -95,7 +95,7 @@ class RAGClient:
             "strategy": strategy or self.config.RAG_DEFAULT_STRATEGY,
             "retrieve_k": retrieve_k,
             "final_k": final_k,
-            "use_reranker": True,
+            "use_reranker": self.config.RAG_USE_RERANKER,
         }
         headers = self._get_headers(request_id)
 
@@ -145,7 +145,7 @@ class RAGClient:
             "strategy": strategy or self.config.RAG_DEFAULT_STRATEGY,
             "retrieve_k": retrieve_k,
             "final_k": final_k,
-            "use_reranker": True,
+            "use_reranker": self.config.RAG_USE_RERANKER,
             "stream": True,
         }
         headers = self._get_headers(request_id)

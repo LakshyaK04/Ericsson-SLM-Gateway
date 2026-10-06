@@ -78,7 +78,7 @@ We wired these into `main.py` with FastAPI lifespan model loading, `/health` and
 
 ### Why we did it this way
 
-- **In-process HuggingFace with 4-bit quantization** rather than full fp16/bf16, because 4-bit NF4 reduces Phi-3-mini's VRAM footprint to ~2.3GB, allowing it to run smoothly on a laptop GPU (RTX 3050 6GB) while retaining high reasoning quality.
+- **In-process HuggingFace with 4-bit quantization** rather than full fp16/bf16, because 4-bit NF4 reduces Phi-3-mini's memory footprint, allowing it to run smoothly on a laptop GPU or CPU while retaining high reasoning quality.
 - **FastAPI lifespan loading** rather than loading per request, because loading weights from disk takes ~25-30 seconds. Lifespan loads once when the process starts.
 - **Asyncio semaphore behind asyncio.to_thread** because HuggingFace PyTorch generation is CPU/GPU blocking. `asyncio.to_thread` runs generation in a worker thread so the event loop remains responsive for health checks, while the semaphore serializes GPU execution.
 - **OpenAI Compatible backend abstraction** so developers without a dedicated CUDA GPU can develop and test against external endpoints (or vLLM/Ollama) with a single environment flag `BACKEND=openai_compatible`.
@@ -446,7 +446,7 @@ We integrated the SLM Gateway (port 8000) and the RAG Service (port 8001) into a
 
 ### Why we did it this way
 
-- **Single Point of LLM Serving:** By having RAG invoke the Gateway's `/v1/chat/completions` endpoint for text generation rather than instantiating its own duplicate model pipeline, we avoid duplicating massive weights in GPU memory (~2.5GB-7GB VRAM savings) and ensure uniform token metering and PII auditing across the entire enterprise.
+- **Single Point of LLM Serving:** By having RAG invoke the Gateway's `/v1/chat/completions` endpoint for text generation rather than instantiating its own duplicate model pipeline, we avoid duplicating massive weights in GPU memory (saving duplicate model memory) and ensure uniform token metering and PII auditing across the entire enterprise.
 - **Header-Based Loop Prevention (`X-Bypass-Router`):** Bypassing intent classification on internal RAG-to-Gateway calls prevents infinite recursive loops without requiring a second dedicated internal port or separate model daemon.
 - **Index-Aware Fallback:** Rather than throwing an internal 500 error or returning empty context when a user asks a document-related question on a freshly deployed instance with zero uploaded documents, the Gateway transparently falls back to local knowledge and warns the caller in `x_routing["warning"]`.
 - **Numbered In-Context Citations:** Numbered brackets `[1]` provide an unambiguous notation for small language models (Phi-3 Mini) to map claims directly back to specific document sources and page numbers.
@@ -460,7 +460,7 @@ A: When a user query routes to `rag`, the Gateway calls the RAG service's `POST 
 A: If no documents have been uploaded to the RAG service, attempting retrieval will return zero chunks, causing either empty context generation or unnecessary RAG roundtrips. The Gateway checks `GET /documents`; if the index is empty, it bypasses RAG, routes directly to the local model, sets `x_sources=None`, and populates `x_routing["warning"] = "RAG service has no indexed documents; routed to local model"`.
 
 **Q3: Why should RAG call the Gateway for LLM generation rather than hosting its own local model instance?**
-A: In an enterprise deployment, hosting LLMs in multiple microservices leads to VRAM starvation, duplicated model cache files, fragmented logging, and independent rate limits. Centralizing LLM generation in the Gateway allows single-tenant GPU memory optimization, unified PII filtering, consistent token usage calculation, and single-pane observability.
+A: In an enterprise deployment, hosting LLMs in multiple microservices leads to GPU memory contention, duplicated model cache files, fragmented logging, and independent rate limits. Centralizing LLM generation in the Gateway allows single-tenant GPU memory optimization, unified PII filtering, consistent token usage calculation, and single-pane observability.
 
 **Q4: Why are RAG sources attached as `x_sources` on the chat completion response rather than injected into the message content text?**
 A: Standard OpenAI chat completion clients (and libraries like `langchain` or `openai-python`) expect `choices[0].message.content` to be a pure string of the assistant's reply. Modifying the response envelope to include custom fields prefixed with `x_` (`x_sources`, `x_routing`, `x_pii`) preserves compatibility with existing SDKs while providing structured citation metadata (chunk ID, source doc, page, dense score, rerank score) for rich client UIs.
@@ -599,7 +599,7 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
 A: Digital text PDFs are parsed directly. If an image-only scanned PDF is uploaded, the parser falls back to Tesseract OCR if available. If Tesseract is not installed on the system (or yields no text), total extracted characters across all pages is zero, and the service returns HTTP 400 Bad Request with: `"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.
 
 **Q2: How does the Gateway prevent CUDA out-of-memory errors when multiple users send simultaneous requests to `hf_local`?**
-A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)`. This ensures that even under concurrent inbound HTTP traffic, only one generation job executes on the GPU at any given instant; subsequent requests queue safely in the asyncio event loop.
+A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)`. This guarantees that even under concurrent inbound HTTP traffic, only one generation job executes on the GPU at any given instant; subsequent requests queue safely in the asyncio event loop.
 
 **Q3: What is the primary bottleneck when scaling this architecture to hundreds of concurrent users, and how would you resolve it?**
 A: In-process single-GPU serialisation is the primary throughput bottleneck. To scale to high concurrency:
@@ -610,7 +610,7 @@ A: In-process single-GPU serialisation is the primary throughput bottleneck. To 
 A: Loading Phi-3 Mini and BGE models takes 15-20 seconds and consumes 3GB+ of memory. Marking real model inference with `@pytest.mark.slow` allows developers and CI systems to run 80 unit and integration tests (testing schemas, routing logic, PII redaction, chunking boundaries, and error codes) in 60 seconds with lightweight mocks, while still verifying real PyTorch execution in dedicated runs.
 
 **Q5: Looking back at the entire build from Phase 0 to Phase 8, what was the most important architectural design decision?**
-A: The loop prevention design using `X-Bypass-Router: true` coupled with centralized model serving. It allowed the RAG service to remain completely decoupled from LLM weight management (saving ~2.6GB of duplicate VRAM), maintained a single point of PII enforcement and token metering at the Gateway, and solved the circular delegation problem elegantly without requiring dual ports or complex orchestration.
+A: The loop prevention design using `X-Bypass-Router: true` coupled with centralized model serving. It allowed the RAG service to remain completely decoupled from LLM weight management (saving duplicate model memory), maintained a single point of PII enforcement and token metering at the Gateway, and solved the circular delegation problem elegantly without requiring dual ports or complex orchestration.
 
 ### Verification command
 
