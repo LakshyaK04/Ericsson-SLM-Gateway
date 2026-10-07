@@ -22,8 +22,10 @@ jobs:
       - name: Set up Python 3.10
         run: uv python install 3.10
 
-      - name: Install dependencies
-        run: uv sync --all-packages --all-groups
+      - name: Install dependencies (CPU PyTorch)
+        run: |
+          uv sync --all-packages --all-groups --no-install-package torch
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run Ruff Lint Check
         run: uv run ruff check .
@@ -33,6 +35,10 @@ jobs:
 
       - name: Run Mypy Type Check
         run: uv run mypy gateway/src rag/src
+
+      - name: Verify README static and asset references exist
+        run: |
+          python -c "import re, sys, os; content = open('README.md', encoding='utf-8').read(); matches = re.findall(r'!?\[.*?\]\(((?:assets|docs|eval/results)/[^)]+)\)', content); missing = [m.split('#')[0] for m in matches if not os.path.exists(m.split('#')[0])]; sys.exit(f'Missing files referenced in README: {missing}' if missing else 0)"
 
   test:
     name: Unit & Integration Tests (Coverage)
@@ -59,8 +65,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-hf-
 
-      - name: Install dependencies
-        run: uv sync --all-packages --all-groups
+      - name: Install dependencies (CPU PyTorch)
+        run: |
+          uv sync --all-packages --all-groups --no-install-package torch
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run Test Suite with Coverage
         run: uv run pytest gateway/tests rag/tests -m "not slow" -v --tb=short --cov=slm_gateway --cov=rag_service --cov-report=term-missing --cov-report=xml
@@ -74,6 +82,11 @@ jobs:
   docker-smoke:
     name: Docker Compose Build & Smoke Test (best effort)
     runs-on: ubuntu-latest
+    # Non-blocking (continue-on-error: true): Building full multi-stage Docker images for two ML services
+    # (including PyTorch, bitsandbytes, Presidio, spaCy, and transformers) on standard 2-vCPU GitHub Actions runners
+    # frequently encounters disk capacity limits (~14GB free) and layer download timeouts.
+    # The smoke test runs with BACKEND=openai_compatible so model weights are not pulled at runtime,
+    # but container build infrastructure failures are kept non-blocking so they do not falsely fail PRs.
     continue-on-error: true
     needs: lint
     steps:
