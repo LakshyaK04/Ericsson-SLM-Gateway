@@ -133,7 +133,7 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 ### 5.1 `hf_local` (Default In-Process Backend)
 - **Model**: `microsoft/Phi-3-mini-4k-instruct`.
 - **Quantization**: 4-bit NormalFloat (NF4) via `bitsandbytes` with double quantization to minimize GPU memory footprint.
-- **Concurrency Isolation**: PyTorch generation runs behind an `asyncio.Semaphore(1)` providing single-device serial execution without thread collisions or CUDA memory corruption.
+- **Concurrency Isolation & Bounded Queue**: PyTorch generation runs behind an `asyncio.Semaphore(1)` guarded by a bounded waiting queue (`INFERENCE_MAX_QUEUE_SIZE=10`, `INFERENCE_QUEUE_TIMEOUT_SECONDS=30.0`). Excess requests receive HTTP 503 (Service Unavailable) with `Retry-After`, and timed-out requests receive HTTP 504 (Gateway Timeout), preventing silent resource exhaustion.
 - **Context Management**: Context window constrained to 4096 tokens. Oldest conversational turns are truncated gracefully while preserving system instructions.
 
 ### 5.2 `openai_compatible` (Flexible Proxy Backend)
@@ -144,7 +144,7 @@ Evaluated against `eval/datasets/router_eval.jsonl` (48 queries, 16 per intent, 
 
 ## 6. Limitations
 
-1. **Single-GPU Semaphore Concurrency**: Because in-process generation runs behind a semaphore of size 1, concurrent requests queue sequentially. For heavy concurrency, deploy multiple replicas or switch `BACKEND=openai_compatible` to route to an external engine like vLLM.
+1. **Single-GPU Bounded Queue Concurrency**: Because in-process generation serializes execution on a single device, requests queue behind a bounded queue (depth 10, timeout 30s) returning 503/504 under overload. For high concurrent throughput, deploy multiple replicas or set `BACKEND=openai_compatible` to route to an external engine like vLLM with continuous batching.
 2. **Batch vs Streaming**: Both SSE streaming (`stream=true`) and standard buffered completions (`stream=false`) are supported.
 3. **English-Language NER**: The bundled Presidio recognizers and spaCy model (`en_core_web_sm`) are trained on English syntax; non-English prompts may have lower entity detection recall.
 4. **Out-of-Distribution Routing**: Queries far removed from exemplar topics that score below the 0.55 similarity threshold fall back cleanly to `general`.

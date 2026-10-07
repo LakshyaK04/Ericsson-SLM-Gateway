@@ -72,7 +72,7 @@ We wired these into `main.py` with FastAPI lifespan model loading, `/health` and
 |------|---------|
 | **NF4 (NormalFloat4)** | An information-theoretically optimal 4-bit quantization data type provided by bitsandbytes for normally distributed neural network weights. |
 | **FastAPI Lifespan** | An asynchronous context manager hook that runs setup (loading the model) on startup and teardown on shutdown. |
-| **Semaphore** | A concurrency synchronization primitive. We use `asyncio.Semaphore(1)` to ensure only one thread generates on the GPU at a time, preventing Out-Of-Memory errors. |
+| **Semaphore & Bounded Queue** | Concurrency synchronization and admission control. We use `asyncio.Semaphore(1)` with a bounded queue (`INFERENCE_MAX_QUEUE_SIZE=10`, `INFERENCE_QUEUE_TIMEOUT_SECONDS=30.0`) to ensure only one thread generates on the GPU at a time while rejecting overload with HTTP 503 and timeouts with HTTP 504. |
 | **OpenAI Compatibility** | Implementing the exact JSON schemas and endpoint paths (`/v1/chat/completions`, `/v1/models`) used by OpenAI, allowing any OpenAI SDK client to work by just changing `base_url`. |
 | **Readiness vs Liveness Probe** | `/health` (liveness) checks if the HTTP server process is running; `/ready` (readiness) returns 200 only when the heavy AI model is loaded and ready for inference. |
 
@@ -80,14 +80,14 @@ We wired these into `main.py` with FastAPI lifespan model loading, `/health` and
 
 - **In-process HuggingFace with 4-bit quantization** rather than full fp16/bf16, because 4-bit NF4 reduces Phi-3-mini's memory footprint, allowing it to run smoothly on a laptop GPU or CPU while retaining high reasoning quality.
 - **FastAPI lifespan loading** rather than loading per request, because loading weights from disk takes ~25-30 seconds. Lifespan loads once when the process starts.
-- **Asyncio semaphore behind asyncio.to_thread** because HuggingFace PyTorch generation is CPU/GPU blocking. `asyncio.to_thread` runs generation in a worker thread so the event loop remains responsive for health checks, while the semaphore serializes GPU execution.
+- **Asyncio semaphore behind asyncio.to_thread with bounded waiting queue** because HuggingFace PyTorch generation is CPU/GPU blocking. `asyncio.to_thread` runs generation in a worker thread so the event loop remains responsive for health checks, while the bounded queue and semaphore serialize GPU execution and shed excessive load.
 - **OpenAI Compatible backend abstraction** so developers without a dedicated CUDA GPU can develop and test against external endpoints (or vLLM/Ollama) with a single environment flag `BACKEND=openai_compatible`.
 - **Standardized OpenAI error shapes** so client libraries like the official `openai` Python SDK handle errors (such as 401 Unauthorized or 422 Validation Error) gracefully as standard API errors.
 
 ### Technical Questions
 
-**Q1: Why do we need `asyncio.to_thread` and an `asyncio.Semaphore(1)` around generation?**
-A: PyTorch's `model.generate()` is a blocking synchronous call. Without `asyncio.to_thread`, running it would block the Python event loop, causing all concurrent requests (including `/health` and `/ready` probes) to freeze. The semaphore of size 1 ensures that multiple requests don't attempt simultaneous generation on a single GPU, avoiding CUDA Out-of-Memory crashes.
+**Q1: Why do we need `asyncio.to_thread` and an `asyncio.Semaphore(1)` with a bounded queue around generation?**
+A: PyTorch's `model.generate()` is a blocking synchronous call. Without `asyncio.to_thread`, running it would block the Python event loop, causing all concurrent requests (including `/health` and `/ready` probes) to freeze. The semaphore of size 1 ensures that multiple requests don't attempt simultaneous generation on a single GPU, avoiding CUDA Out-of-Memory crashes. The bounded queue (max depth 10, timeout 30s) prevents unbounded memory accumulation under traffic spikes by failing fast with HTTP 503 / 504.
 
 **Q2: How is the gateway accessed by client applications?**
 A: The gateway exposes an open local endpoint on port 8000 mimicking OpenAI's standard `/v1/chat/completions`. Client applications can connect directly without needing complex cloud authentication headers.
@@ -582,7 +582,7 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
 | Term | Meaning |
 |------|---------|
 | **Clean-Clone Validation** | Testing repository onboarding from a fresh clone to ensure no implicit local state, uncommitted files, or missing paths prevent execution. |
-| **Single-GPU Serialisation** | Guarding deep learning model inference behind an `asyncio.Semaphore(1)` to prevent concurrent CUDA memory allocation faults on a single GPU. |
+| **Single-GPU Bounded Serialisation** | Guarding model inference behind an `asyncio.Semaphore(1)` with a bounded waiting queue (`INFERENCE_MAX_QUEUE_SIZE=10`, `INFERENCE_QUEUE_TIMEOUT_SECONDS=30.0`) to serialize GPU execution and reject overload with HTTP 503 / 504. |
 | **PagedAttention / Continuous Batching** | Advanced inference engine techniques (used by vLLM/TGI) to dynamically batch tokens across multiple concurrent requests without thread-blocking. |
 | **Layout-Aware OCR** | Optical character recognition engines that identify columns, tables, and bounding boxes in scanned images before passing text to downstream parsers. |
 | **Definition of Done (DoD)** | A formal agreement specifying all quality, testing, architectural, and documentation criteria a software deliverable must meet before release. |
@@ -599,7 +599,7 @@ We conducted a comprehensive final verification, dry-run clone audit, and produc
 A: Digital text PDFs are parsed directly. If an image-only scanned PDF is uploaded, the parser falls back to Tesseract OCR if available. If Tesseract is not installed on the system (or yields no text), total extracted characters across all pages is zero, and the service returns HTTP 400 Bad Request with: `"No extractable text found in PDF. The document appears empty or scanned, and OCR is unavailable or found no text (install Tesseract to enable OCR for scanned pages)."`. This fails early and prevents corrupt or empty documents from polluting vector collections.
 
 **Q2: How does the Gateway prevent CUDA out-of-memory errors when multiple users send simultaneous requests to `hf_local`?**
-A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)`. This guarantees that even under concurrent inbound HTTP traffic, only one generation job executes on the GPU at any given instant; subsequent requests queue safely in the asyncio event loop.
+A: Autoregressive token generation in PyTorch is thread-blocking and allocates GPU KV-caches. In `slm_gateway.backends.hf_local`, model generation is wrapped in `asyncio.to_thread` guarded by an `asyncio.Semaphore(1)` and a bounded queue (`INFERENCE_MAX_QUEUE_SIZE=10`, `INFERENCE_QUEUE_TIMEOUT_SECONDS=30.0`). This guarantees that only one generation job executes on the GPU at any given instant; subsequent requests wait in a bounded FIFO queue and receive 503 Service Unavailable (or 504 Gateway Timeout) if overloaded, avoiding OOM crashes.
 
 **Q3: What is the primary bottleneck when scaling this architecture to hundreds of concurrent users, and how would you resolve it?**
 A: In-process single-GPU serialisation is the primary throughput bottleneck. To scale to high concurrency:

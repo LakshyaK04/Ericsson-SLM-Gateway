@@ -10,51 +10,6 @@ A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compati
 
 ## 1. System Architecture
 
-```
-                    USER / CLIENT
-                          │
-                          ▼
-                  ┌──────────────┐
-                  │ FastAPI      │
-                  │ Gateway      │
-                  └──────┬───────┘
-                         │
-                         ▼
-                   PII Redaction (Presidio + Codename Deny-list)
-                         │
-                         ▼
-                  Semantic Router (BGE Embeddings)
-                     /       \
-                    /         \
-              Normal query    RAG query
-                  │              │
-                  ▼              ▼
-              Phi-3 Mini     Hybrid RAG Pipeline
-                                 │
-                           ┌─────┴─────┐
-                           │           │
-                        Documents    Query
-                           │           │
-                         Parse       Hybrid Search
-                           │       ┌───┴───┐
-                        Chunk      │ BM25  │ Dense (ChromaDB)
-                           │       └───┬───┘
-                        Embed          │
-                           │      Reciprocal Rank Fusion (RRF)
-                        Store          │
-                                   Top Chunks
-                                       │
-                               Cross-Encoder Reranker
-                                       │
-                                     Top 3
-                                       │
-                                       ▼
-                                   Phi-3 Mini
-                                       │
-                                       ▼
-                                    Answer
-```
-
 ```mermaid
 graph TD
     Client([User / Client]) --> Gateway[FastAPI Gateway :8000]
@@ -215,21 +170,22 @@ To benchmark retrieval performance beyond small synthetic suites, we evaluated *
 - **Cross-Encoder**: `BAAI/bge-reranker-base`.
 - **Command to Reproduce**: `uv run python eval/prepare_benchmark.py && uv run python eval/benchmark_retrieval.py`
 
-| Configuration | Re-Ranker | RRF $k$ | Dense / Sparse Weight | Hit@1 (%) | Hit@3 (%) | Hit@10 (%) | MRR | nDCG@10 | Mean Latency (ms) | P95 Latency (ms) |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **BM25 Sparse Lexical Only** | Off | — | N/A | **86.00%** | 94.67% | 97.33% | **0.9060** | 0.9230 | 7.07 ms | 10.96 ms |
-| **BGE Dense Vector Only** | Off | — | N/A | 80.67% | 91.33% | 96.00% | 0.8643 | 0.8879 | 101.29 ms | 179.81 ms |
-| **Hybrid RRF ($k=60$)** | Off | 60 | 1.0 / 1.0 | **86.00%** | 94.00% | **99.33%** | 0.9092 | 0.9300 | 107.28 ms | 180.67 ms |
-| **Hybrid RRF ($k=20$)** | Off | 20 | 1.0 / 1.0 | **86.00%** | 94.67% | **99.33%** | **0.9103** | **0.9309** | 98.72 ms | 153.37 ms |
-| **Hybrid RRF ($k=100$)** | Off | 100 | 1.0 / 1.0 | **86.00%** | 93.33% | **99.33%** | 0.9086 | 0.9294 | 102.01 ms | 156.34 ms |
-| **Hybrid Weighted RRF (0.7 / 0.3)** | Off | 60 | 0.7 / 0.3 | 85.33% | 94.67% | 98.00% | 0.9023 | 0.9216 | 101.75 ms | 134.33 ms |
-| **Hybrid Weighted RRF (0.3 / 0.7)** | Off | 60 | 0.3 / 0.7 | 85.33% | 95.33% | 98.67% | 0.9050 | 0.9253 | 106.77 ms | 191.49 ms |
-| **Hybrid + Cross-Encoder Re-Ranking** | On | 60 | 1.0 / 1.0 | 74.00% | 87.33% | 98.67% | 0.8242 | 0.8638 | 617.17 ms | 847.76 ms |
+| Configuration | Re-Ranker | RRF $k$ | Dense / Sparse Weight | Hit@1 (%) | Hit@1 (95% CI) | Hit@3 (%) | Hit@10 (%) | MRR | MRR (95% CI) | nDCG@10 | Mean Latency (ms) | P95 Latency (ms) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **BM25 Sparse Lexical Only** | Off | — | N/A | **86.00%** | [80.0%, 91.3%] | 94.67% | 97.33% | **0.9060** | [0.8647, 0.9433] | 0.9230 | 7.07 ms | 10.96 ms |
+| **BGE Dense Vector Only** | Off | — | N/A | 80.67% | [74.0%, 86.7%] | 91.33% | 96.00% | 0.8643 | [0.8168, 0.9091] | 0.8879 | 101.29 ms | 179.81 ms |
+| **Hybrid RRF ($k=60$)** | Off | 60 | 1.0 / 1.0 | **86.00%** | [80.0%, 91.3%] | 94.00% | **99.33%** | 0.9092 | [0.8708, 0.9443] | 0.9300 | 107.28 ms | 180.67 ms |
+| **Hybrid RRF ($k=20$)** | Off | 20 | 1.0 / 1.0 | **86.00%** | [80.0%, 91.3%] | 94.67% | **99.33%** | **0.9103** | [0.8724, 0.9449] | **0.9309** | 98.72 ms | 153.37 ms |
+| **Hybrid RRF ($k=100$)** | Off | 100 | 1.0 / 1.0 | **86.00%** | [80.0%, 91.3%] | 93.33% | **99.33%** | 0.9086 | [0.8692, 0.9446] | 0.9294 | 102.01 ms | 156.34 ms |
+| **Hybrid Weighted RRF (0.7 / 0.3)** | Off | 60 | 0.7 / 0.3 | 85.33% | [79.3%, 90.7%] | 94.67% | 98.00% | 0.9023 | [0.8608, 0.9401] | 0.9216 | 101.75 ms | 134.33 ms |
+| **Hybrid Weighted RRF (0.3 / 0.7)** | Off | 60 | 0.3 / 0.7 | 85.33% | [79.3%, 90.7%] | 95.33% | 98.67% | 0.9050 | [0.8648, 0.9416] | 0.9253 | 106.77 ms | 191.49 ms |
+| **Hybrid + Cross-Encoder Re-Ranking** | On | 60 | 1.0 / 1.0 | 74.00% | [66.7%, 80.7%] | 87.33% | 98.67% | 0.8242 | [0.7743, 0.8728] | 0.8638 | 617.17 ms | 847.76 ms |
 
 *Empirical Insights & Honest Tradeoffs*:
 - **BM25 vs. Dense**: BM25 achieved superior Hit@1 (86.00% vs 80.67%) and MRR (0.9060 vs 0.8643) at over 14x faster speed (7.07 ms vs 101.29 ms). SQuAD queries contain precise named entities and verbatim phrase spans where exact inverted index matching excels over dense vector approximation.
-- **Hybrid Fusion Value**: Hybrid RRF ($k=20$) achieved the highest overall retrieval quality (**99.33% Hit@10**, **0.9103 MRR**, **0.9309 nDCG@10**). By merging lexical exact matches with dense semantic neighborhoods, misses went from 4/150 (BM25) to 1/150 (hybrid RRF $k=20$).
-- **Cross-Encoder Performance**: Adding `bge-reranker-base` lowered Hit@1 from 86.00% to 74.00% and increased latency to 617.17 ms. A possible reason is domain shift or cross-attention scoring topically relevant neighboring passages higher than the specific paragraph containing the answer span, though this hypothesis is not tested.
+- **Hybrid Fusion Value**: Hybrid RRF ($k=20$) achieved the highest overall retrieval quality (**99.33% Hit@10**, **0.9103 MRR**, **0.9309 nDCG@10**). By merging lexical exact matches with dense semantic neighborhoods, misses went from 4/150 (BM25) to 1/150 (hybrid RRF $k=20$). Parameter variations across $k=20, 60, 100$ and weighting vary by at most 1 query out of 150 (128 vs 129 hits), falling completely inside the overlapping 95% bootstrap confidence intervals (~80% to ~91%).
+- **Cross-Encoder Regression & Root Cause Analysis**: Adding `bge-reranker-base` lowered Hit@1 from 86.00% to 74.00% (-12.0 pp) and increased latency to 617.17 ms. An empirical query-by-query diagnostic ([eval/results/rerank_diagnostics.md](eval/results/rerank_diagnostics.md)) proved the pipeline is bug-free and that **79.3% of demotions** (23/29) were caused by same-article neighbor passages outranking the gold passage on broad topical overlap. Testing an alternative cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`) on the identical candidate pool raised Hit@1 to **94.67%** (MRR 0.9717), and score interpolation (`0.8 * RRF + 0.2 * CE`) recovered **88.00% Hit@1**, confirming the drop is specific to BGE cross-encoder calibration on Wikipedia QA.
+- **How to Read These Results**: Evaluated on an empirical 500-passage, 150-query slice of SQuAD v2.0. Metrics reflect a single deterministic run; bootstrap 95% confidence intervals (10,000 resamples) separate real effects from sampling variance. Differences of ≤2% represent variations of 1–3 queries and fall within sampling noise.
 
 ---
 
@@ -280,7 +236,7 @@ Evaluated across 36 ground-truth questions on 3 technical PDFs (`scripts/create_
 
 ### 3.5 Findings and Honest Caveats
 - **Small and author-written evaluation sets**: Evaluation sets other than SQuAD are small and author-written (e.g. 36 questions across 3 synthetic PDFs for chunking, 24 queries for hybrid retrieval, 48 queries for routing, and 9 questions for the smoke test).
-- **BM25 strength and cross-encoder reduction on SQuAD**: On the SQuAD benchmark, BM25 alone was a strong baseline (86.00% Hit@1, 0.9060 MRR, 7.07 ms latency). Adding the `bge-reranker-base` cross-encoder lowered Hit@1 from 86.00% to 74.00% (and MRR from 0.9092 to 0.8242) while increasing latency to 617.17 ms.
+- **BM25 strength and cross-encoder reduction on SQuAD**: On the SQuAD benchmark, BM25 alone was a strong baseline (86.00% Hit@1, 0.9060 MRR, 7.07 ms latency). Adding the `bge-reranker-base` cross-encoder lowered Hit@1 from 86.00% to 74.00% (and MRR from 0.9092 to 0.8242) while increasing latency to 617.17 ms. Detailed diagnostics ([eval/results/rerank_diagnostics.md](eval/results/rerank_diagnostics.md)) verified this was caused by same-article neighbor passages scoring higher on broad topical overlap (79.3% of demotions), while an alternative cross-encoder (`ms-marco-MiniLM-L-6-v2`) raised Hit@1 to 94.67%.
 - **Nimbus smoke test failure modes**: On the Nimbus smoke test (fictional document, 9 questions), no configuration answered all questions in every mode. The default chat configuration (`structure`, `hybrid`, re-ranker off) achieved 88.89% Hit@3 (66.67% Hit@1, MRR 0.7593, 88.7 ms latency on CPU) and failed 1 of 9 questions: "How many days are alerts kept?" (expected `45`). With the re-ranker on, it achieved 88.89% Hit@3 (77.78% Hit@1, MRR 0.8333, 305.1 ms latency on CPU) and failed 1 of 9 questions: "What is the default retention period?" (expected `45`).
 - **Hardware Context**: SQuAD retrieval benchmarks were executed with CUDA GPU acceleration (NVIDIA RTX 3050 6GB Laptop GPU). Intent routing, chunking, hybrid, and smoke evaluations were executed on CPU.
 - **Document Parsing and OCR**: PyMuPDF handles digital text PDFs directly; scanned pages fall back to Tesseract OCR when available. Scanned documents without OCR engines are rejected with HTTP 400.

@@ -19,7 +19,7 @@ This document catalogs the current operational boundaries and known limitations 
 
 | Limitation | Impact | Mitigation |
 |---|---|---|
-| **Single-GPU / CPU semaphore serialization** | The `asyncio.Semaphore(1)` around `model.generate()` serializes all inference requests. Under concurrent load, requests queue sequentially. | Switch to `BACKEND=openai_compatible` and point to a dedicated inference server (vLLM, TGI) with continuous batching. |
+| **Single-GPU / CPU bounded queue serialization** | The `asyncio.Semaphore(1)` around `model.generate()` serializes all inference requests behind a bounded waiting queue (`INFERENCE_MAX_QUEUE_SIZE=10`, `INFERENCE_QUEUE_TIMEOUT_SECONDS=30.0`). Under excessive load, queue depth limits return HTTP 503 and timeouts return HTTP 504. | Switch to `BACKEND=openai_compatible` and point to a dedicated inference server (vLLM, TGI) with continuous batching. |
 | **In-process model loading** | Loading Phi-3 Mini weights takes ~20-30 seconds on startup. During this window, `/ready` returns 503. | Docker Compose `depends_on: service_healthy` prevents traffic until ready. |
 | **RAG response replay latency** | For requests routed to `rag_service`, the gateway waits for the RAG service to complete generation before replaying the response word-by-word over SSE. Consequently, the initial SSE response time represents total generation latency rather than time-to-first-token (TTFT). In the playground UI, this metric is labeled `Latency (answer replayed)` for RAG routes and `TTFT` only for direct `hf_local` routes. | True end-to-end token streaming would require streaming support from the RAG service generation pipeline. |
 
