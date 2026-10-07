@@ -33,6 +33,7 @@ ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml README.md ./
+COPY src/ ./src/
 RUN uv pip install --no-cache -e .
 
 # ------------------------------------------------------------------------------
