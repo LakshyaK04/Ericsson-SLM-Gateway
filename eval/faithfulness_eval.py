@@ -22,7 +22,7 @@ sys.path.insert(0, str(REPO_ROOT / "rag" / "src"))
 REFUSAL_ANSWER = "The provided documents do not contain enough information to answer this question."
 
 RESULTS_DIR = REPO_ROOT / "eval" / "results"
-OUTPUT_REPORT = RESULTS_DIR / "faithfulness_report.md"
+OUTPUT_REPORT = RESULTS_DIR / "faithfulness_checker_unit_report.md"
 
 
 def extract_citations(text: str) -> List[int]:

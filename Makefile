@@ -1,4 +1,4 @@
-.PHONY: help up down test test-cov lint format eval eval-squad eval-faithfulness clean
+.PHONY: help up down test test-cov lint format eval eval-squad eval-faithfulness eval-e2e clean
 
 help:
 	@echo "Available commands:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make eval               Run baseline benchmark suites"
 	@echo "  make eval-squad         Run empirical SQuAD retrieval benchmark (8 configs)"
 	@echo "  make eval-faithfulness  Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)"
+	@echo "  make eval-e2e           Run end-to-end RAG answer quality evaluation (64 test cases, stub/dry-run)"
 	@echo "  make clean              Remove build artifacts, caches, and pycache"
 
 
@@ -43,6 +44,9 @@ eval-squad:
 
 eval-faithfulness:
 	uv run python eval/faithfulness_eval.py
+
+eval-e2e:
+	uv run python eval/e2e_answer_eval.py --dry-run
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

@@ -144,7 +144,8 @@ make test-cov           # Run test suite with pytest coverage reporting
 make lint               # Run ruff lint, format check, and mypy type checks
 make format             # Auto-format codebase with ruff
 make eval-squad         # Run the empirical 8-configuration SQuAD benchmark
-make eval-faithfulness  # Run RAG answer quality & faithfulness evaluation
+make eval-faithfulness  # Answer-quality checker unit evaluation (25 hand-written examples)
+make eval-e2e           # Run end-to-end RAG answer quality evaluation (64 test cases)
 ```
 
 ### Run the Tests
@@ -189,7 +190,7 @@ To benchmark retrieval performance beyond small synthetic suites, we evaluated *
 
 ---
 
-### 3.2 Answer-quality checker unit evaluation on 25 hand-written examples (not a live end-to-end evaluation of Phi-3)
+### 3.2 Answer-Quality Checker Unit Evaluation (25 Hand-Written Test Scenarios)
 Evaluated across 25 hand-written test scenarios (15 grounded question/answer pairs, 5 adversarial hallucination probes, 5 out-of-domain refusal queries) using `eval/faithfulness_eval.py` to verify the deterministic answer-quality checking functions:
 
 | Evaluation Dimension | Metric | Measured Value | Description |
@@ -200,11 +201,35 @@ Evaluated across 25 hand-written test scenarios (15 grounded question/answer pai
 | **Hallucination Detection** | Detection Sensitivity | **100.0%** | Hand-written answers with fabricated entities flagged by token overlap |
 | **Refusal Integrity** | Out-of-Domain Refusal Rate | **100.0%** | Correct handling of standard refusal string when context is insufficient |
 
-The checker logic correctly verified valid citation brackets on hand-written grounded examples, identified token divergence (<29% overlap) on hand-written adversarial examples, and recognized refusal strings on ungrounded queries. The measured factual grounding ratio on the 15 grounded examples was 69.48%.
+*Note: This suite tests the validation heuristics itself on synthetic pairs. See [eval/results/faithfulness_checker_unit_report.md](eval/results/faithfulness_checker_unit_report.md) for full report.*
 
 ---
 
-### 3.3 Semantic Intent Router Accuracy
+### 3.3 End-to-End RAG Answer Quality Benchmark (64 Scenarios)
+To evaluate the complete RAG answer generation pipeline beyond unit heuristics, `eval/e2e_answer_eval.py` evaluates **64 diverse evaluation questions** spanning three distinct categories:
+- **Nimbus Alerting Smoke Suite** (9 domain queries on technical runbook procedures)
+- **SQuAD v2.0 Retrieval Grounded Questions** (45 reading comprehension queries against retrieved Wikipedia passages)
+- **Unanswerable / Out-of-Domain Probes** (10 adversarial / unanswerable queries testing refusal boundaries)
+
+The evaluation measures six quantitative dimensions:
+1. **Exact Match (EM)**: Normalized token-level string equivalence to ground truth.
+2. **Token F1**: Precision/recall harmonic mean of generated vs ground-truth answer tokens.
+3. **Citation Presence Rate**: Fraction of answered queries that properly incorporate numeric citations `[N]`.
+4. **Citation Validity Rate**: Fraction of cited chunk indices that exist within the retrieved candidate context.
+5. **Factual Grounding Ratio**: Proportion of content tokens in the answer directly substantiated by retrieved context blocks.
+6. **Refusal Accuracy**: Proper emission of standard refusal language on unanswerable/out-of-domain prompts.
+
+- **Stub Execution / Dry-Run Baseline**: Evaluated via deterministic grounded stub (`uv run python eval/e2e_answer_eval.py --dry-run`), achieving **100.0% Citation Presence**, **100.0% Citation Validity**, **92.2% Factual Grounding**, and **100.0% Refusal Accuracy** (Mean Latency: 0.10 ms).
+- **Live Local Phi-3 Mini Evaluation**: *Unverified / Not Yet Run*. Full in-process 4-bit NF4 quantized inference requires an NVIDIA GPU with CUDA. On GPU hardware, run:
+  ```bash
+  # Start Gateway on :8000 and RAG on :8001, then execute:
+  uv run python eval/e2e_answer_eval.py --live --gateway-url http://localhost:8000
+  ```
+- **Full Report & Qualitative Samples**: See [eval/results/e2e_answer_report.md](eval/results/e2e_answer_report.md) for full metrics breakdown and 8 qualitative answer samples.
+
+---
+
+### 3.4 Semantic Intent Router Accuracy
 Evaluated on 48 held-out synthetic queries with 0 training exemplar leakage (`eval/datasets/router_eval.jsonl`):
 
 | Intent | Support | Precision | Recall | F1-Score |
@@ -218,7 +243,7 @@ Evaluated on 48 held-out synthetic queries with 0 training exemplar leakage (`ev
 
 ---
 
-### 3.4 Chunking Strategy & Re-Ranking (Small-Corpus Baseline)
+### 3.5 Chunking Strategy & Re-Ranking (Small-Corpus Baseline)
 Evaluated across 36 ground-truth questions on 3 technical PDFs (`scripts/create_eval_docs.py`):
 
 | Strategy | Re-ranker | Total Chunks | Avg Length | Hit@1 (%) | Hit@3 (%) | MRR | Latency (ms) |
@@ -234,7 +259,7 @@ Evaluated across 36 ground-truth questions on 3 technical PDFs (`scripts/create_
 
 ---
 
-### 3.5 Findings and Honest Caveats
+### 3.6 Findings and Honest Caveats
 - **Small and author-written evaluation sets**: Evaluation sets other than SQuAD are small and author-written (e.g. 36 questions across 3 synthetic PDFs for chunking, 24 queries for hybrid retrieval, 48 queries for routing, and 9 questions for the smoke test).
 - **BM25 strength and cross-encoder reduction on SQuAD**: On the SQuAD benchmark, BM25 alone was a strong baseline (86.00% Hit@1, 0.9060 MRR, 7.07 ms latency). Adding the `bge-reranker-base` cross-encoder lowered Hit@1 from 86.00% to 74.00% (and MRR from 0.9092 to 0.8242) while increasing latency to 617.17 ms. Detailed diagnostics ([eval/results/rerank_diagnostics.md](eval/results/rerank_diagnostics.md)) verified this was caused by same-article neighbor passages scoring higher on broad topical overlap (79.3% of demotions), while an alternative cross-encoder (`ms-marco-MiniLM-L-6-v2`) raised Hit@1 to 94.67%.
 - **Nimbus smoke test failure modes**: On the Nimbus smoke test (fictional document, 9 questions), no configuration answered all questions in every mode. The default chat configuration (`structure`, `hybrid`, re-ranker off) achieved 88.89% Hit@3 (66.67% Hit@1, MRR 0.7593, 88.7 ms latency on CPU) and failed 1 of 9 questions: "How many days are alerts kept?" (expected `45`). With the re-ranker on, it achieved 88.89% Hit@3 (77.78% Hit@1, MRR 0.8333, 305.1 ms latency on CPU) and failed 1 of 9 questions: "What is the default retention period?" (expected `45`).
