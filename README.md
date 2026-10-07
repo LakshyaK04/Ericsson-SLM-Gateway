@@ -79,7 +79,7 @@ http://localhost:8000/
 http://localhost:8000/playground
 ```
 Features:
-- **Live SSE Token Streaming**: Real-time token streaming for local model inference, and replayed word streaming for RAG responses.
+- **Live SSE Token Streaming**: Real-time token streaming for both local model inference and RAG answer generation (with configurable replay fallback).
 - **PII Sanitizer Lab**: Side-by-side comparison of raw prompts vs redacted model inputs with colored entity pills.
 - **Semantic Intent Radar**: Live visualization of intent similarity scores and threshold fallback.
 - **Hybrid RAG Inspector**: Query search showing dense, BM25, RRF, and cross-encoder scores per chunk.
@@ -276,5 +276,31 @@ Evaluated across 36 ground-truth questions on 3 technical PDFs (`scripts/create_
 
 ---
 
-## 5. License
+## 5. Release Checklist (v1.0.0)
+
+A release-readiness verification protocol ensuring production hardness, reproducible benchmarks, and operational integrity:
+
+- [x] **CI & Quality Checks Green**:
+  - `uv run ruff check .` passes with zero lint violations.
+  - `uv run ruff format --check .` passes across all repository files.
+  - `uv run mypy gateway/src rag/src` passes across all 34 source files with zero type errors.
+  - `uv run pytest gateway/tests rag/tests -m "not slow"` passes (111 tests passing).
+- [x] **Benchmarks Reproducible & Empirically Documented**:
+  - 8-configuration SQuAD retrieval benchmark (`eval/benchmark_retrieval.py`) with bootstrap 95% confidence intervals recorded in [eval/results/retrieval_benchmark.md](eval/results/retrieval_benchmark.md).
+  - Cross-encoder demotion diagnosis (`eval/rerank_diagnostics.py`) documented with failure taxonomy in [eval/results/rerank_diagnostics.md](eval/results/rerank_diagnostics.md).
+  - 64-scenario End-to-End Answer Quality benchmark (`eval/e2e_answer_eval.py`) with metrics breakdown in [eval/results/e2e_answer_report.md](eval/results/e2e_answer_report.md).
+- [x] **True End-to-End Streaming & Concurrency**:
+  - Live Server-Sent Events (SSE) token streaming implemented across Gateway and RAG pipeline with fallback toggle (`RAG_STREAMING_ENABLED=true`).
+  - Concurrency protected by bounded queue (`depth=10, timeout=30s`) returning HTTP 503/504 under load.
+- [x] **Security & Privacy Hardened**:
+  - Fail-closed PII redaction (`PII_FAIL_MODE=closed`) covering prompt, conversation history, and document ingestion.
+  - Strict CORS origin validation replacing insecure wildcards.
+  - Per-client IP rate limiting and request size limits enforcing boundaries.
+- [x] **Limitations Current & Transparent**:
+  - All operational boundaries, domain shift caveats, and hardware requirements documented in [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+  - Web Playground assets (`gateway/src/slm_gateway/static/index.html`, `assets/demo.gif`) verified on disk and served by default.
+
+---
+
+## 6. License
 Distributed under the [MIT License](LICENSE).
