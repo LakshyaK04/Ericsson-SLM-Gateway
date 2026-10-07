@@ -562,3 +562,14 @@ def test_chat_completions_rag_live_token_streaming(client, monkeypatch):
     assert "Live " in resp.text
     assert "RAG token streaming." in resp.text
     assert "[DONE]" in resp.text
+
+
+def test_playground_endpoint_serves_html(client):
+    """Verify GET / and GET /playground return 200 with HTML content from static/index.html."""
+    for path in ["/", "/playground"]:
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert "<!DOCTYPE html>" in resp.text
+        assert "Local GenAI Stack" in resp.text
+        assert "Playground template not found" not in resp.text

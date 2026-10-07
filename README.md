@@ -2,8 +2,9 @@
 
 A privacy-focused, fully local Generative AI stack combining an **OpenAI-Compatible SLM Gateway** with a **Two-Stage Hybrid RAG Pipeline (BM25 + Dense Vectors + Cross-Encoder Re-Ranking)**. Built to run locally with open-weights models (`microsoft/Phi-3-mini-4k-instruct`, `BAAI/bge-small-en-v1.5`, `BAAI/bge-reranker-base`), enabling on-device execution without cloud data egress.
 
-![Local GenAI Stack Demo](assets/demo.gif)
-*Illustrative animation of the request lifecycle.*
+![Local GenAI Stack Demo (Illustrative Animation)](assets/demo.gif)
+*Note: The animation above is a script-generated illustrative mockup of the request lifecycle (`scripts/generate_demo_gif.py`).*
+> **TODO**: Replace illustrative animation with a real screen recording of the Web Playground at `assets/playground.gif`.
 
 ---
 

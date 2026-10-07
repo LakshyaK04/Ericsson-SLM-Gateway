@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy virtualenv from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy gateway source code and configuration
+# Copy gateway source code, static assets (Playground UI), and configuration
 COPY src/ ./src/
 COPY pyproject.toml README.md ./
 
